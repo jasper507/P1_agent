@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 30
     agent_max_steps: int = 5
 
+    # 电商项目（Django）的地址。本地 docker compose 起的栈默认在 8080
+    django_base_url: str = "http://127.0.0.1:8080"
+    django_timeout_seconds: float = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

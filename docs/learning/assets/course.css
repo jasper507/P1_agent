@@ -1,0 +1,230 @@
+/* 所有课程页和参考文档共用的样式。新页面直接 link 这个文件，不要内联第二份。 */
+
+:root {
+  --bg: #fdfcf8;
+  --text: #1f1f1c;
+  --muted: #6b6a63;
+  --rule: #e4e1d6;
+  --panel: #f4f2ea;
+  --accent: #9a3b1f;
+  --ok: #2f6b3a;
+  --ok-bg: #e7f1e6;
+  --bad: #9b2c2c;
+  --bad-bg: #f7e6e4;
+  --code-bg: #f1efe7;
+  --font-body: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", Georgia, serif;
+  --font-ui: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-code: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a18;
+    --text: #e8e6df;
+    --muted: #a19f96;
+    --rule: #3a3934;
+    --panel: #24231f;
+    --accent: #e08a68;
+    --ok: #8fcf98;
+    --ok-bg: #1f3323;
+    --bad: #f0a3a3;
+    --bad-bg: #3a2222;
+    --code-bg: #26251f;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.85;
+}
+
+main {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 48px 16px 96px;
+}
+
+header.doc-head { margin-bottom: 40px; }
+header.doc-head .kicker {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+h1 { font-size: 30px; line-height: 1.35; margin: 6px 0 12px; font-weight: 700; }
+h2 {
+  font-size: 22px;
+  margin: 56px 0 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+h3 { font-size: 18px; margin: 32px 0 8px; }
+p, li { margin: 0 0 12px; }
+.lede { font-size: 19px; color: var(--muted); }
+.muted { color: var(--muted); }
+a { color: var(--accent); text-underline-offset: 3px; }
+
+nav.toc {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  background: var(--panel);
+  padding: 14px 18px;
+  border-radius: 6px;
+}
+nav.toc ol { margin: 0; padding-left: 20px; }
+nav.toc li { margin: 2px 0; }
+
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+  padding: 12px 16px;
+  margin: 20px 0;
+}
+.callout p:last-child { margin-bottom: 0; }
+
+/* 流程图：一列编号步骤，每步标出谁在做事 */
+ol.flow { list-style: none; padding: 0; margin: 20px 0; counter-reset: flow; }
+ol.flow li {
+  counter-increment: flow;
+  position: relative;
+  padding: 10px 14px 10px 52px;
+  margin: 0 0 8px;
+  background: var(--panel);
+  border-radius: 6px;
+}
+ol.flow li::before {
+  content: counter(flow);
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 26px;
+  text-align: center;
+}
+.who {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 0 8px;
+  margin-right: 6px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  color: var(--muted);
+  vertical-align: 2px;
+}
+
+.table-wrap { overflow-x: auto; margin: 16px 0 24px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--font-ui); font-weight: 600; font-size: 13px; color: var(--muted); }
+
+code, pre { font-family: var(--font-code); font-size: 14px; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+:not(pre) > code { overflow-wrap: anywhere; }
+pre {
+  background: var(--code-bg);
+  padding: 14px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+pre code { background: none; padding: 0; }
+figure.code { margin: 16px 0 28px; }
+figure.code figcaption {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* 面试题：先自己答，再展开参考答案 */
+details.qa {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 10px 16px;
+  margin: 0 0 12px;
+}
+details.qa summary { cursor: pointer; font-weight: 600; }
+details.qa summary .tag {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+details.qa[open] summary { margin-bottom: 8px; }
+details.qa .answer p:last-child { margin-bottom: 4px; }
+
+.cite { font-size: 13px; vertical-align: super; line-height: 0; }
+ol.sources { font-size: 15px; }
+
+/* 练习题组件，见 course.js */
+.quiz-q {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 0 0 18px;
+}
+.quiz-q .prompt { font-weight: 600; margin-bottom: 10px; }
+.quiz-q .options { display: grid; gap: 8px; }
+.quiz-q button.option {
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.quiz-q button.option:hover:not(:disabled) { border-color: var(--accent); }
+.quiz-q button.option:disabled { cursor: default; }
+.quiz-q button.option.correct { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.quiz-q button.option.wrong { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+.quiz-q .feedback { display: none; margin-top: 10px; font-size: 15px; }
+.quiz-q.answered .feedback { display: block; }
+.quiz-score {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-radius: 6px;
+}
+
+ul.checklist { list-style: none; padding-left: 0; }
+ul.checklist li { padding-left: 4px; }
+ul.checklist input { margin-right: 8px; }
+
+footer.doc-foot {
+  margin-top: 64px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media print {
+  body { background: #fff; color: #000; font-size: 12pt; }
+  main { max-width: none; padding: 0; }
+  nav.toc, .no-print { display: none; }
+  h2 { break-after: avoid; }
+  details.qa, figure.code, ol.flow li, tr { break-inside: avoid; }
+  a { color: inherit; }
+}

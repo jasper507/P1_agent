@@ -1,21 +1,31 @@
-from fastapi import HTTPException, Request
-from pydantic import BaseModel
+import re
+
+from fastapi import Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from app.django_client import DjangoClient, DjangoError, DjangoUnauthorized, get_django
+
+# Django 的 session key 是 32 位小写字母和数字。格式不对就不必去问 Django，
+# 也挡住了带换行、分号的值被拼进我们发给 Django 的 Cookie 头
+SESSION_ID_RE = re.compile(r"[a-z0-9]{1,64}")
 
 
 class CurrentUser(BaseModel):
-    id: str
+    id: int
     username: str
+    # repr=False：哪天有人 logger.info(user)，session id 也不会进日志
+    session_id: str = Field(repr=False)
 
 
-# 第 1 步先用假会话。第 2 步换成：带着浏览器的 cookie 去问 Django 的 /api/auth/me/
-FAKE_SESSIONS = {
-    "demo-u1": CurrentUser(id="u1", username="小明"),
-    "demo-u2": CurrentUser(id="u2", username="小红"),
-}
-
-
-def get_current_user(request: Request) -> CurrentUser:
-    user = FAKE_SESSIONS.get(request.cookies.get("sessionid", ""))
-    if user is None:
+async def get_current_user(request: Request, django: DjangoClient = Depends(get_django)) -> CurrentUser:
+    """和电商网站共用登录：浏览器带来的 sessionid，原样拿去问 Django「这是谁」。"""
+    session_id = request.cookies.get("sessionid", "")
+    if not SESSION_ID_RE.fullmatch(session_id):
         raise HTTPException(status_code=401, detail="未登录")
-    return user
+    try:
+        me = await django.me(session_id)
+    except DjangoUnauthorized as e:
+        raise HTTPException(status_code=401, detail="未登录或登录已过期") from e
+    except DjangoError as e:
+        raise HTTPException(status_code=502, detail="电商服务暂时不可用，请稍后再试") from e
+    return CurrentUser(id=me["id"], username=me["username"], session_id=session_id)
