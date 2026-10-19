@@ -1,4 +1,5 @@
 """测试用的假货：假 LLM 按顺序返回预设的回复，假电商后端照着 Django 视图的行为回 JSON。都不连网。"""
+import asyncio
 import re
 from http.cookies import SimpleCookie
 from types import SimpleNamespace
@@ -16,6 +17,9 @@ def assistant(content=None, tool_calls=None):
     return SimpleNamespace(role="assistant", content=content, tool_calls=tool_calls)
 
 
+HANG = object()  # 放进 FakeLLM 的回复列表里，表示这次请求卡住不返回
+
+
 class FakeLLM:
     def __init__(self, replies):
         self.replies = list(replies)
@@ -25,6 +29,9 @@ class FakeLLM:
     async def create(self, **kwargs):
         self.requests.append(list(kwargs["messages"]))
         reply = self.replies.pop(0)
+        if reply is HANG:
+            await asyncio.sleep(5)
+            raise AssertionError("这次请求应该已经被超时打断了")
         if isinstance(reply, Exception):
             raise reply
         return SimpleNamespace(choices=[SimpleNamespace(message=reply)])
@@ -33,6 +40,7 @@ class FakeLLM:
 # 两个已登录用户的 sessionid（真实的 Django session key 也是 32 位小写字母和数字）
 SESSION_U1 = "xiaoming" + "1" * 24
 SESSION_U2 = "xiaohong" + "2" * 24
+SESSION_U1_AGAIN = "xiaoming" + "3" * 24  # 小明重新登录后拿到的新 sessionid
 
 
 def make_order(public_id, status, total="99.00", name="T恤", quantity=1):
@@ -82,6 +90,7 @@ class FakeDjango:
         self.users = {
             SESSION_U1: {"id": 1, "username": "xiaoming", "is_staff": False},
             SESSION_U2: {"id": 2, "username": "xiaohong", "is_staff": False},
+            SESSION_U1_AGAIN: {"id": 1, "username": "xiaoming", "is_staff": False},
         }
         # 每个用户的订单，最新的在前（和 Django 的 order_by("-created_at") 一致）
         self.orders = {

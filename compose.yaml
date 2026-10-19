@@ -1,0 +1,8 @@
+# agent 自己用的 Redis，存多轮对话的历史。只监听本机，不对外开放。
+# 对话 30 分钟就过期，重启丢了也能接受，所以不开持久化。
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"

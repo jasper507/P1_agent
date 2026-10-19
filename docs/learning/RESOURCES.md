@@ -16,6 +16,16 @@
   客户端复用 TCP 连接、在请求之间保存 cookie。项目用的 [httpx2](https://pypi.org/project/httpx2/) 是 Pydantic 接手维护的后继版本，接口相同。Use for: 连接池和串号风险。
 - [FastAPI 文档: Lifespan Events](https://fastapi.tiangolo.com/advanced/events/)
   启动和关闭时执行的代码。Use for: 关闭连接池。
+- [Redis 文档: SET](https://redis.io/docs/latest/commands/set/)
+  `NX`、`EX` 的含义；成功的 SET 会丢掉原来的过期时间；「Patterns」一节的单实例锁（随机 token、脚本释放），并注明更推荐 Redlock。Use for: 对话锁、滑动过期。
+- [Redis 文档: Distributed Locks with Redis](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/)
+  为什么锁的值必须随机、锁的有效期、锁续期、fencing token 的建议，Redis 8.4 起可用 `DELEX key IFEQ token` 释放。Use for: 「一轮跑得比锁还久」「为什么不用 Redlock」这类追问。
+- [Redis 文档: Transactions](https://redis.io/docs/latest/develop/using-commands/transactions/)
+  WATCH 的乐观锁语义，被 Redis 过期删除也算修改；脚本通常比事务更简单更快。Use for: 释放锁为什么用 WATCH、和 Lua 的取舍。
+- [Redis 文档: redis-py Pipelines and transactions](https://redis.io/docs/latest/develop/clients/redis-py/transpipe/)
+  `pipe.watch()` 之后命令立即执行、`pipe.multi()` 开始事务、key 被改过时抛 `WatchError`。Use for: 释放锁的代码怎么写。
+- [fakeredis](https://pypi.org/project/fakeredis/)
+  纯 Python 实现的 Redis 协议，支持 asyncio，多个客户端共用一个 FakeServer；Lua 脚本要装额外的 lua 依赖。Use for: 测试为什么不用自己写的内存版。
 
 ## Wisdom (Communities)
 
@@ -25,3 +35,4 @@
 
 - Python 文档没写 `allowed_domains=[]`（空列表）的行为。项目里靠测试验证：两个用户请求过后 jar 仍然为空。
 - DeepSeek 文档里没找到讲工具调用消息流程的专门页面（之前的链接打开是通用页面）。目前按 OpenAI 兼容的 Chat Completions 格式理解。
+- 没找到 DeepSeek 或 OpenAI 文档里「每条工具结果前面必须有对应的工具调用」的原文（ADR 0006 和第 3 步 Q10 依赖这一条）。第 3 步联调时用真实接口实测：只发工具结果、不发调用，看是否报错。

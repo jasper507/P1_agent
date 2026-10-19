@@ -62,10 +62,9 @@ def test_chat_uses_logged_in_user(client, fake_llm, fake_django):
     r = client.post("/api/chat", json={"message": "我有哪些订单？"})
 
     assert r.status_code == 200
-    assert r.json() == {
-        "reply": "你有一张已付款订单。",
-        "tool_calls": [{"name": "list_my_orders", "arguments": "{}", "ok": True}],
-    }
+    body = r.json()
+    assert body["reply"] == "你有一张已付款订单。"
+    assert body["tool_calls"] == [{"name": "list_my_orders", "arguments": "{}", "ok": True}]
     tool_result = fake.requests[1][-1]
     assert tool_result["tool_call_id"] == "call_1"
     assert uuid_for(201) in tool_result["content"] and uuid_for(101) not in tool_result["content"]

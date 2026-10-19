@@ -55,3 +55,26 @@ agent 自己不管账号。它读浏览器带来的 `sessionid` cookie，拿去�
 ```powershell
 docker compose --env-file docker/deployment/.env -f compose.deployment-local.yaml -p project-one-deployment-local down
 ```
+
+## 第 3 步：多轮对话
+
+对话历史存在服务端的 Redis 里，前端只带对话编号。第一次提问不传 `conversation_id`，回复里会带一个；之后每次带上它，agent 就能接着上一轮聊。30 分钟没有新消息，对话就过期。
+
+1. 在 `C:\P1_agent` 里起 Redis（需要 Docker Desktop）：
+   ```powershell
+   docker compose -p p1-agent up -d --wait redis
+   ```
+2. 按第 2 步启动电商项目、登录、启动 agent
+3. 在 http://127.0.0.1:8000/docs 调 `POST /api/chat`：
+   - 先发 `{"message": "我有哪些订单？"}`，记下回复里的 `conversation_id`
+   - 再发 `{"message": "第一张是什么时候下的？", "conversation_id": "上一步的编号"}`
+
+可能的错误：编号不存在、已过期或不是你的，返回 404；同一段对话上一条还没处理完就发下一条，返回 409；一轮处理超过 90 秒，返回 504；Redis 没起，返回 503。
+
+Redis 不在本机 6379 的话，在 `.env` 里加一行 `REDIS_URL=redis://...`。
+
+停掉 Redis：
+
+```powershell
+docker compose -p p1-agent down
+```
