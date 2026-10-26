@@ -1,0 +1,482 @@
+<title>P1 客服 Agent 学习手册</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 版式：一条单栏阅读线；每一步是一张「工单」：场景 → 改了什么 → 代码 → 面试 */
+:root {
+  --bg: #f6f7f4;
+  --paper: #ffffff;
+  --fg: #1e2523;
+  --muted: #5d6864;
+  --line: #d8dfda;
+  --accent: #0f6b5f;
+  --accent-soft: #e2efeb;
+  --amber: #a85d12;
+  --amber-soft: #f7ead9;
+  --bad: #a83a32;
+  --bad-soft: #f6e3e0;
+  --code-bg: #f0f3ef;
+  --code-fg: #1e2523;
+  --hl-key: #8a3ab8;
+  --hl-str: #2f7a2f;
+  --hl-com: #7b8580;
+  --hl-num: #a85d12;
+  --hl-fn: #1f5fa8;
+  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141917; --paper: #1b211f; --fg: #e3e9e6; --muted: #9aa6a1; --line: #2e3734;
+    --accent: #5cc2b1; --accent-soft: #1d3530; --amber: #e3a35c; --amber-soft: #3a2c1c;
+    --bad: #ec8d84; --bad-soft: #3b2220; --code-bg: #111614; --code-fg: #dfe7e3;
+    --hl-key: #d4a2f0; --hl-str: #9fd69a; --hl-com: #7f8b86; --hl-num: #e3a35c; --hl-fn: #8fbcf2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141917; --paper: #1b211f; --fg: #e3e9e6; --muted: #9aa6a1; --line: #2e3734;
+  --accent: #5cc2b1; --accent-soft: #1d3530; --amber: #e3a35c; --amber-soft: #3a2c1c;
+  --bad: #ec8d84; --bad-soft: #3b2220; --code-bg: #111614; --code-fg: #dfe7e3;
+  --hl-key: #d4a2f0; --hl-str: #9fd69a; --hl-com: #7f8b86; --hl-num: #e3a35c; --hl-fn: #8fbcf2;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.8; }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-size: 2.1rem; }
+h2 { font-size: 1.55rem; margin-top: 8px; }
+h3 { font-size: 1.15rem; margin-top: 28px; margin-bottom: 8px; }
+p { margin: 10px 0; }
+.lede { font-size: 1.1rem; color: var(--muted); max-width: 40em; }
+.eyebrow { font-size: .78rem; letter-spacing: .12em; color: var(--accent); font-weight: 700; }
+a { color: var(--accent); }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+section.step { margin-top: 64px; padding-top: 28px; border-top: 2px solid var(--line); }
+.toc { display: grid; gap: 10px; margin-top: 24px; }
+.toc a { display: grid; grid-template-columns: 3.2em 1fr; gap: 12px; padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--fg); }
+.toc a:hover, .toc a:focus-visible { border-color: var(--accent); outline: none; }
+.toc .n { font-family: var(--font-mono); color: var(--accent); font-weight: 600; }
+.toc .t { min-width: 0; }
+.toc small { display: block; color: var(--muted); font-size: .85rem; line-height: 1.5; }
+.risk { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 18px 0; }
+.risk div { background: var(--bad-soft); border-radius: 8px; padding: 14px 16px; }
+.risk b { color: var(--bad); display: block; }
+.chat { display: grid; gap: 8px; margin: 14px 0; padding: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+.msg { max-width: 85%; padding: 8px 12px; border-radius: 10px; line-height: 1.6; }
+.msg.u { justify-self: end; background: var(--accent); color: var(--paper); }
+.msg.a { justify-self: start; background: var(--code-bg); }
+.msg.tool { justify-self: start; font-family: var(--font-mono); font-size: .8rem; color: var(--muted); background: transparent; border: 1px dashed var(--line); }
+.ba { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+.ba > div { padding: 14px 16px; border-radius: 8px; min-width: 0; }
+.ba .before { background: var(--bad-soft); }
+.ba .after { background: var(--accent-soft); }
+.ba h4 { margin: 0 0 6px; font-size: .9rem; letter-spacing: .05em; }
+.ba .before h4 { color: var(--bad); }
+.ba .after h4 { color: var(--accent); }
+.ba ul { margin: 0; padding-left: 1.2em; }
+.analogy { border-left: 4px solid var(--amber); background: var(--amber-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+.analogy b { color: var(--amber); }
+pre { margin: 12px 0 0; padding: 16px; background: var(--code-bg); color: var(--code-fg); border-radius: 8px 8px 0 0; overflow-x: auto; font-size: .84rem; line-height: 1.65; }
+pre code { background: none; padding: 0; font-size: inherit; }
+.file { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); margin-top: 16px; }
+ol.explain { margin: 0 0 12px; padding: 12px 16px 12px 2.6em; background: var(--paper); border: 1px solid var(--line); border-top: none; border-radius: 0 0 8px 8px; }
+ol.explain li { margin: 6px 0; }
+ol.explain li::marker { color: var(--accent); font-family: var(--font-mono); font-weight: 600; }
+.hljs-keyword, .hljs-built_in { color: var(--hl-key); }
+.hljs-string { color: var(--hl-str); }
+.hljs-comment { color: var(--hl-com); font-style: italic; }
+.hljs-number, .hljs-literal { color: var(--hl-num); }
+.hljs-title, .hljs-title.function_, .hljs-title.class_ { color: var(--hl-fn); }
+.hljs-meta { color: var(--amber); }
+.skills { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.skills span { font-size: .85rem; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.say { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 14px 0; }
+.say b { color: var(--accent); }
+.techs { display: grid; gap: 10px; margin: 16px 0; }
+.tech { display: grid; grid-template-columns: 9em 1fr; gap: 14px; padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.tech > * { min-width: 0; }
+.tech b { font-family: var(--font-mono); font-size: .92rem; }
+.tech small { color: var(--muted); display: block; }
+.plot { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 16px 0; overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.plot text { fill: var(--fg); font-family: var(--font-body); font-size: 12px; }
+.plot .muted { fill: var(--muted); }
+.road { display: grid; gap: 12px; margin: 16px 0; }
+.road div { padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.road b { color: var(--accent); }
+.road .now { border-color: var(--accent); }
+@media (max-width: 640px) {
+  .ba { grid-template-columns: 1fr; }
+  .tech { grid-template-columns: 1fr; gap: 4px; }
+  h1 { font-size: 1.7rem; }
+  .msg { max-width: 95%; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">P1_AGENT · 第 0–4 步</div>
+  <h1>P1 客服 Agent 学习手册</h1>
+  <p class="lede">这份手册只回答三个问题：这个项目到底解决什么问题；每一步为什么要做、和上一步比变了什么；代码一行一行在干什么。读完你应该能用自己的话把整个项目讲一遍。</p>
+</header>
+
+<section>
+  <h2>先说结论：这个项目解决什么问题</h2>
+  <p>你做了一个电商网站（项目一）。网站上线后，客服每天被问的问题大概就这几类：</p>
+  <div class="chat">
+    <div class="msg u">我的订单到哪了？</div>
+    <div class="msg u">买的 T 恤签收五天了，还能退吗？</div>
+    <div class="msg u">买多少钱包邮？</div>
+    <div class="msg u">帮我把那张没付款的订单取消掉。</div>
+  </div>
+  <p>这些问题的答案其实都已经在系统里：订单在数据库里，规则在售后政策里。让人工客服去查、去念，既慢又贵。所以我们想让大模型来当客服。</p>
+  <p>但直接把大模型接上去会出三种事故，<b>这个项目每一步都是在堵其中一个洞</b>：</p>
+  <div class="risk">
+    <div><b>看到别人的订单</b>模型根据用户说的「帮我查 u2 的订单」就去查了，泄露隐私。</div>
+    <div><b>瞎编政策</b>用户问「降价能退差价吗」，政策里根本没写，模型凭常识编一个「可以」。</div>
+    <div><b>乱动订单</b>用户只是问问，模型就把订单取消了；或者重复取消、退两次款。</div>
+  </div>
+  <p>所以这个项目一句话可以这么说：<b>给自己的电商系统做一个 AI 客服，让它能查订单、答政策、办业务，同时保证它不越权、不编造、不乱操作。</b>技术都是为这三条服务的，不是为了堆名词。</p>
+
+  <h3>五步的路线（每一步多会一件事、多堵一个洞）</h3>
+  <nav class="toc">
+    <a href="#s0"><span class="n">0</span><span class="t">最小 agent 循环<small>模型自己决定要不要查订单。理解 agent 的原理。</small></span></a>
+    <a href="#s1"><span class="n">1</span><span class="t">做成一个网络服务<small>从脚本变成别人能调用的接口，可以离线测试。</small></span></a>
+    <a href="#s2"><span class="n">2</span><span class="t">接上真实登录和真实订单<small>堵「看到别人订单」这个洞。</small></span></a>
+    <a href="#s3"><span class="n">3</span><span class="t">记住上下文，支持追问<small>「那第二张呢」能接上；多人同时用也不串。</small></span></a>
+    <a href="#s4"><span class="n">4</span><span class="t">按售后政策回答（RAG）<small>堵「瞎编政策」这个洞，并用评测数字证明效果。</small></span></a>
+    <a href="#next"><span class="n">5+</span><span class="t">接下来：取消订单要先确认<small>堵「乱动订单」这个洞。</small></span></a>
+  </nav>
+</section>
+
+<section class="step" id="s0">
+  <div class="eyebrow">第 0 步</div>
+  <h2>最小 agent 循环：模型自己决定查不查</h2>
+  <p><b>业务场景：</b>用户问「我有哪些订单？」，模型要知道自己答不出来，得先去查。</p>
+  <div class="chat">
+    <div class="msg u">我有哪些还没付款的订单？</div>
+    <div class="msg tool">模型 → 调用 list_my_orders(status="PENDING_PAYMENT")</div>
+    <div class="msg tool">程序 → 返回 [{"order_id":"A1001","status":"PENDING_PAYMENT","total":"199.00"}]</div>
+    <div class="msg a">您有 1 张待付款订单：A1001，金额 199 元。</div>
+  </div>
+  <div class="analogy"><b>类比：</b>模型像一个新来的客服，脑子好但不知道店里的数据。工具（Function Calling）就是给他一部内线电话。他自己判断要不要打电话、打给谁、问什么；电话那头（我们的代码）负责真的去查。「agent 循环」就是：他打完电话，听到结果，再决定是继续打还是直接回答客人。</div>
+
+  <div class="file">step0/agent.py（核心部分）</div>
+<pre><code class="language-python">def run_agent(user_input, max_steps=5):
+    messages = [
+        {"role": "system", "content": "你是电商客服。涉及订单信息时必须调用工具查询，不要编造。"},  # ①
+        {"role": "user", "content": user_input},
+    ]
+    for step in range(1, max_steps + 1):                     # ②
+        resp = client.chat.completions.create(model=MODEL, messages=messages, tools=TOOLS)
+        msg = resp.choices[0].message
+        messages.append(msg)                                 # ③
+        if not msg.tool_calls:                               # ④
+            return msg.content
+        for call in msg.tool_calls:                          # ⑤
+            args = json.loads(call.function.arguments or "{}")
+            result = TOOL_MAP[call.function.name](**args)
+            messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+    return "达到最大步数，停止"</code></pre>
+  <ol class="explain">
+    <li>系统提示：告诉模型它的身份和规矩。注意它只能「劝」模型，管不住模型。</li>
+    <li>最多循环 5 次。防止模型一直调工具停不下来，白白花钱。</li>
+    <li>模型说的话（包括「我要调哪个工具」）也要放回对话里，下一次它才记得自己刚才干了什么。</li>
+    <li>模型没要求调工具，说明它已经可以回答了，循环结束。</li>
+    <li>模型要求调工具：我们真的执行这个函数，把结果用 <code>tool_call_id</code> 对上号再交回给模型。</li>
+  </ol>
+  <h3>这一步里藏着的一个关键设计</h3>
+  <p>工具 <code>list_my_orders</code> 的参数里<b>只有 status，没有「用户是谁」</b>。用户是谁由代码里的 <code>CURRENT_USER</code> 决定。所以就算用户说「帮我查 u2 的订单」，模型也没有办法把 u2 传进去。这个思路一直用到最后一步。</p>
+  <div class="skills"><span>Function Calling</span><span>agent 循环</span><span>步数上限</span></div>
+  <div class="say"><b>面试这么说：</b>我先不用框架，手写了一个 agent 循环：模型返回 tool_calls 就执行工具、把结果回填，没有 tool_calls 就结束，并设了步数上限。这样我清楚框架底层在做什么。</div>
+</section>
+
+<section class="step" id="s1">
+  <div class="eyebrow">第 1 步</div>
+  <h2>做成一个网络服务</h2>
+  <p><b>业务场景：</b>脚本只能自己在命令行里跑。网站的聊天框要能把用户的话发过来、拿回答案，所以要变成一个 HTTP 接口：<code>POST /api/chat</code>。</p>
+  <div class="ba">
+    <div class="before"><h4>第 0 步的问题</h4><ul><li>只能在命令行跑，网站用不了</li><li>测试要真的调 DeepSeek，花钱、慢、结果不稳定</li><li>密钥写在代码旁边</li></ul></div>
+    <div class="after"><h4>第 1 步的改法</h4><ul><li>FastAPI 提供 <code>/api/chat</code> 接口</li><li>测试里用「假模型」代替 DeepSeek，不连网、不花钱</li><li>配置统一从 <code>.env</code> 读，密钥不进代码库</li></ul></div>
+  </div>
+  <div class="analogy"><b>类比：</b>第 0 步是你在家里给自己做饭；第 1 步是开了一个外卖窗口，别人按固定格式下单（请求体 <code>{"message": ...}</code>），你按固定格式出餐（<code>{"reply": ..., "tool_calls": [...]}</code>）。「假模型」就像试营业时请朋友扮演客人，不用真的进货。</div>
+  <div class="file">app/main.py（简化，只看骨架）</div>
+<pre><code class="language-python">@app.post("/api/chat", response_model=ChatResponse)     # ①
+async def chat(
+    body: ChatRequest,                                   # ②
+    user: CurrentUser = Depends(get_current_user),       # ③
+    llm: AsyncOpenAI = Depends(get_llm),                 # ④
+):
+    result = await run_agent(llm, message=body.message, ...)
+    return ChatResponse(reply=result.reply, tool_calls=result.tool_calls)</code></pre>
+  <ol class="explain">
+    <li>声明一个 POST 接口；<code>response_model</code> 规定返回的格式，多余字段不会漏出去。</li>
+    <li><code>ChatRequest</code> 是 Pydantic 模型：<code>message</code> 必须是 1 到 500 个字，不合格 FastAPI 直接回 422，代码里不用手写校验。</li>
+    <li><code>Depends</code> 叫「依赖注入」：接口需要「当前用户」，就交给 <code>get_current_user</code> 去算。第 1 步它返回的是假用户，第 2 步换成真登录，接口代码一行不用改。</li>
+    <li>模型客户端也是注入进来的。测试时把它换成假模型，这就是「能离线测试」的原因。</li>
+  </ol>
+  <div class="skills"><span>FastAPI</span><span>Pydantic 校验</span><span>依赖注入</span><span>离线测试</span></div>
+  <div class="say"><b>面试这么说：</b>我用 FastAPI 的依赖注入把「当前用户」「模型客户端」都做成可替换的依赖。测试时换成假实现，整个 agent 循环不连网就能测，测试稳定也不花钱。</div>
+</section>
+
+<section class="step" id="s2">
+  <div class="eyebrow">第 2 步 · 堵「看到别人订单」</div>
+  <h2>接上真实登录和真实订单</h2>
+  <p><b>业务场景：</b>用户在你的电商网站登录后打开客服，问「我有哪些订单」，看到的必须是他自己的真订单。</p>
+  <div class="chat">
+    <div class="msg u">帮我查一下订单 0000…0000 的详情（其实是别人的订单）</div>
+    <div class="msg tool">agent → 以「当前用户」身份问商城：这张订单给我看看</div>
+    <div class="msg tool">商城 → 404：不是你的订单</div>
+    <div class="msg a">查不到这张订单，可能订单号有误，或者它不属于当前账号。</div>
+  </div>
+  <div class="ba">
+    <div class="before"><h4>第 1 步的问题</h4><ul><li>用户是假的，订单是假的</li><li>agent 自己要管「谁能看什么」，容易写错</li></ul></div>
+    <div class="after"><h4>第 2 步的改法</h4><ul><li>浏览器带来的登录凭证（sessionid）原样交给商城验证</li><li>查订单也用这个身份，<b>由商城判断订单是不是你的</b></li><li>agent 自己不存、不猜任何用户身份</li></ul></div>
+  </div>
+  <div class="analogy"><b>类比：</b>客服 agent 是银行大堂经理，商城是柜台。大堂经理不自己判断你能取多少钱，而是拿着<b>你本人的身份证</b>去柜台办。柜台怎么规定，就怎么办。经理手里没有万能卡，所以就算被人骗，也办不出别人的业务。</div>
+
+  <div class="file">app/auth.py：每个请求先确认「你是谁」</div>
+<pre><code class="language-python">async def get_current_user(request, django=Depends(get_django)):
+    session_id = request.cookies.get("sessionid", "")           # ①
+    if not SESSION_ID_RE.fullmatch(session_id):                  # ②
+        raise HTTPException(401, "未登录")
+    try:
+        me = await django.me(session_id)                         # ③
+    except DjangoUnauthorized:
+        raise HTTPException(401, "未登录或登录已过期")
+    except DjangoError:
+        raise HTTPException(502, "电商服务暂时不可用，请稍后再试")   # ④
+    return CurrentUser(id=me["id"], username=me["username"], session_id=session_id)</code></pre>
+  <ol class="explain">
+    <li>从浏览器的 cookie 里取出登录凭证。因为 agent 和商城在同一个域名下，用户在商城登录过，这里就能拿到。</li>
+    <li>先检查格式（只能是小写字母和数字）。格式都不对就不用去问商城，也防止有人塞换行、分号进去伪造请求头。</li>
+    <li>拿着凭证去问商城的 <code>/api/auth/me/</code>：「这个人是谁？」商城说了算。</li>
+    <li>商城挂了和用户没登录是两回事，分别回 502 和 401，前端才能给出正确提示。</li>
+  </ol>
+
+  <div class="file">app/tools.py：模型能传的参数被锁死</div>
+<pre><code class="language-python">class GetOrderDetailArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")    # ①
+    order_id: UUID                               # ②
+
+def summarize_order(order):                      # ③
+    return {"order_id": order["public_id"], "status": order["status"],
+            "total": order["total"], "items": [...]}</code></pre>
+  <ol class="explain">
+    <li><code>extra="forbid"</code>：模型如果多传一个 <code>user_id</code>，直接算参数错误。模型想越权，连门都没有。</li>
+    <li>订单号必须是合法的 UUID 才会被拼进网址，防止拼出奇怪的路径。</li>
+    <li>发给模型之前去掉收件人姓名、电话、详细地址。模型服务在第三方，用不上的个人信息就不发（数据最小化）。</li>
+  </ol>
+  <h3>还有一个容易被忽略的坑：串号</h3>
+  <p>所有用户共用同一个 HTTP 客户端（为了复用连接，更快）。普通客户端会像浏览器一样<b>记住</b>商城返回的 cookie，下一个用户的请求要是忘了带凭证，就会自动带上上一个人的。我们给它配了一个「什么都不存」的 cookie 罐子，彻底杜绝这个问题。</p>
+  <div class="skills"><span>身份透传</span><span>越权防护</span><span>参数白名单</span><span>数据最小化</span><span>错误分级（401 / 404 / 502）</span></div>
+  <div class="say"><b>面试这么说：</b>模型只能决定「查什么」，不能决定「以谁的身份查」。身份来自浏览器的登录凭证，由商城验证；订单归属也由商城判断。工具参数用白名单锁死，模型想传 user_id 都传不进去。</div>
+</section>
+
+<section class="step" id="s3">
+  <div class="eyebrow">第 3 步</div>
+  <h2>记住上下文，支持追问</h2>
+  <p><b>业务场景：</b>真实客服对话很少一问一答就结束。</p>
+  <div class="chat">
+    <div class="msg u">我有哪些订单？</div>
+    <div class="msg a">您有两张订单：① T 恤 199 元，已发货；② 耳机 89 元，待付款。</div>
+    <div class="msg u">那第二张呢，什么时候过期？</div>
+    <div class="msg a">（第 2 步的 agent 不知道「第二张」是哪张，答不上来；第 3 步可以）</div>
+  </div>
+  <div class="ba">
+    <div class="before"><h4>第 2 步的问题</h4><ul><li>每次请求都是全新的，模型不记得上一句</li><li>如果让前端把历史传过来，前端可以伪造「客服之前说过可以退」</li></ul></div>
+    <div class="after"><h4>第 3 步的改法</h4><ul><li>对话历史存在服务端的 Redis 里，30 分钟过期，最多留 10 轮</li><li>每段对话记着属于谁，别人拿到编号也读不了</li><li>同一段对话同一时间只处理一条消息（加锁）</li></ul></div>
+  </div>
+  <div class="analogy"><b>类比：</b>Redis 是客服台上的「对话记录本」，每段对话一页，页眉写着客人的名字。别人拿着页码来，名字对不上就当没这页。加锁就像「这页正在写，请稍等」：客人连点两次发送，第二次会被告知「上一条还在处理」，不会两条回答互相覆盖。</div>
+
+  <div class="file">app/main.py：一轮对话的完整流程</div>
+<pre><code class="language-python">conversation_id = body.conversation_id or uuid4()                  # ①
+async with conversations.lock(conversation_id):                     # ②
+    history = [] if body.conversation_id is None else \
+        await conversations.load(conversation_id, user.id)          # ③
+    async with asyncio.timeout(settings.round_timeout_seconds):     # ④
+        result = await run_agent(llm, history=history, message=body.message, ...)
+    await conversations.save_round(conversation_id, user.id,
+                                   history, result.new_round)       # ⑤</code></pre>
+  <ol class="explain">
+    <li>第一次提问没有编号，服务端生成一个新的，跟着回答一起返回；之后前端每次带上它。</li>
+    <li>给这段对话加锁。锁本身有过期时间（120 秒），程序半路崩了，锁也会自己消失，不会把对话永远锁死。</li>
+    <li>读历史时同时传入用户 id：对话不属于这个用户，就当它不存在（返回 404，和商城对待别人订单的方式一样）。</li>
+    <li>一轮最多跑 90 秒。必须比锁的 120 秒短，否则锁过期了另一条消息进来，两边会同时改同一段历史。</li>
+    <li>一轮<b>完整跑完</b>才保存，而且是整轮保存（用户的话 + 工具调用 + 工具结果 + 回答）。跑到一半出错就不存，用户重发即可。</li>
+  </ol>
+  <h3>为什么要「整轮」保存和截断？</h3>
+  <p>模型接口有个硬规定：一条「我要调用工具」的消息后面，必须紧跟着对应的工具结果。如果按条数截断，可能把工具结果删了、调用留着，下一轮发给模型就会直接报错。所以历史只按「轮」来留和删。这种「控制发给模型的上下文」的工作，叫<b>上下文工程</b>，是 AI 应用岗常问的内容。</p>
+  <p>还有一条提示词规则：「之前查到的订单状态可能已经变了，用户问状态时要重新查」。防止模型把 10 分钟前的记忆当成事实。</p>
+  <div class="skills"><span>Redis</span><span>会话归属</span><span>分布式锁</span><span>超时控制</span><span>上下文工程</span></div>
+  <div class="say"><b>面试这么说：</b>对话历史放在服务端 Redis，不信任前端传来的历史。按「轮」保存和截断，保证工具调用和结果总是成对。同一对话用带过期时间的锁串行处理，一轮的超时比锁短，避免锁过期后并发写。</div>
+</section>
+
+<section class="step" id="s4">
+  <div class="eyebrow">第 4 步 · 堵「瞎编政策」</div>
+  <h2>按售后政策回答（RAG）</h2>
+  <p><b>业务场景：</b>用户问的是规则，不是订单。答案在售后政策文档里（我们写了 5 份虚构的政策：退换货、退款、运费、发票、保修，一共 49 条条款）。</p>
+  <div class="chat">
+    <div class="msg u">买的 T 恤签收五天了，还能退吗？</div>
+    <div class="msg tool">模型 → 调用 search_policy("签收五天还能无理由退货吗")</div>
+    <div class="msg tool">程序 → 找到《退换货政策》1.1 适用条件：自签收之日起七天内……</div>
+    <div class="msg a">可以。签收七天内、吊牌包装完好的商品支持无理由退货（《退换货政策》1.1）。</div>
+    <div class="msg u">买完就降价了，能退差价吗？</div>
+    <div class="msg a">售后政策里没有关于退差价的规定，建议联系人工客服确认。</div>
+  </div>
+  <div class="ba">
+    <div class="before"><h4>第 3 步的问题</h4><ul><li>模型只能凭「常识」回答政策问题</li><li>每家店规则不同，常识答案经常是错的</li><li>答错了也没有出处可查</li></ul></div>
+    <div class="after"><h4>第 4 步的改法</h4><ul><li>先检索政策条款，再让模型<b>只根据查到的条款</b>回答</li><li>回答带出处；接口另外返回真正查到的条款原文</li><li>相关度不够就一条都不给，模型手里没有条款，就没法照着编</li></ul></div>
+  </div>
+  <div class="analogy"><b>类比：</b>RAG（检索增强生成）就是「开卷考试」。模型是考生，政策文档是课本。检索是「先翻到相关的那几页」，生成是「照着这几页答题」。拒答阈值就是监考老师：如果翻到的几页明显不相关，干脆不让答，回一句「课本上没写」。</div>
+
+  <h3>RAG 分三步，对应三个文件</h3>
+  <p><b>① 切段</b>（<code>app/policy_chunks.py</code>）：按条款切，一条条款一段，并把「《退换货政策》 &gt; 1. 七天无理由退货 &gt; 1.1 适用条件」这样的标题路径拼在正文前面。这样正文里没写「退货」两个字，也能凭标题搜到。条款号同时就是出处。</p>
+  <p><b>② 向量化并建索引</b>（<code>app/policy_search.py</code>）：用本机的小模型 bge-small-zh 把每段文字变成一串数字（向量）。意思相近的话，向量也相近。向量存进 Qdrant（在程序内存里运行，不用单独起服务）。服务启动时建一次，现在只要 1.2 秒。</p>
+  <p><b>③ 检索并把关</b>：</p>
+  <div class="file">app/policy_search.py：查的时候</div>
+<pre><code class="language-python">def search(self, query):
+    vector_hits = self.vector_search(query)                     # ①
+    top_score = vector_hits[0][1] if vector_hits else 0.0
+    if top_score &lt; self.min_score:                              # ②
+        return SearchResult(chunks=[], top_score=top_score)
+    ranking = [i for i, _ in vector_hits]
+    if self.hybrid:                                             # ③
+        ranking = rrf([ranking, self.keyword_search(query)])
+    return SearchResult(chunks=[self.chunks[i] for i in ranking[:self.top_k]],
+                        top_score=top_score)                    # ④</code></pre>
+  <ol class="explain">
+    <li>把用户的问题也变成向量，在 Qdrant 里找最像的 10 段，每段带一个相似度（0 到 1，越大越像）。</li>
+    <li><b>第一道关（代码）：</b>最像的那段相似度都低于 0.55，说明政策里大概率没有这方面的规定，一段都不给模型。</li>
+    <li>关键词检索（jieba 分词 + BM25）默认关闭，只在配置打开时和向量结果合并。为什么关掉，看下面的评测。</li>
+    <li>给模型最相关的 4 段。</li>
+  </ol>
+  <div class="file">app/tools.py：把检索包装成模型能调用的工具</div>
+<pre><code class="language-python">async def search_policy(ctx, args):
+    result = await asyncio.to_thread(ctx.policies.search, args.query)   # ①
+    if not result.chunks:
+        return {"found": False, "message": "售后政策里没有找到和这个问题相关的规定"}
+    ctx.sources.extend(result.chunks)                                    # ②
+    return {"found": True,
+            "clauses": [{"citation": c.citation, "text": c.text} for c in result.chunks]}</code></pre>
+  <ol class="explain">
+    <li>向量模型在 CPU 上算，放到单独的线程里跑，不卡住同时在处理的其他用户。</li>
+    <li>真正查到了哪些条款，由代码记下来，接口原样返回给前端。模型在回答里标错了出处，也不影响这份列表。</li>
+  </ol>
+  <p><b>第二道关（提示词）：</b>系统提示要求「查到的条款如果没回答用户问的事，也要照实说没有规定，不要凭常识补充」。第一道关拦不住的，靠它兜底。</p>
+
+  <h3>怎么证明它有效：评测</h3>
+  <p>我们准备了 63 道题：51 道政策里有答案（每道标好了正确条款），12 道政策里没有（比如「能分期吗」）。评测<b>不调用大模型</b>，只测检索，所以又快又稳定，改一次参数跑一次就知道变好还是变坏。</p>
+  <p><b>指标一：查得准不准（Recall@4）。</b>意思是「正确条款有没有出现在给模型的前 4 段里」。51 道题里有几道命中，就是几除以 51。</p>
+  <div class="techs">
+    <div class="tech"><b>只用向量</b><span>1.00（51 道全中）。<small>现在的默认设置。</small></span></div>
+    <div class="tech"><b>只用关键词</b><span>0.80。<small>关键词只认字面。比如用户说「盒子破了」，政策写的是「外包装破损」，两句话几乎没有相同的词。</small></span></div>
+    <div class="tech"><b>两个合并</b><span>0.96，比只用向量还低。<small>关键词那一路把「快递盒子破了」「发票什么时候开」这两道题的正确条款挤出了前 4。</small></span></div>
+  </div>
+  <p>所以我们<b>根据数据</b>默认只用向量，混合检索留成开关。这是第 4 步面试最值得讲的一段：不是名词越多越好，而是用评测决定要不要。</p>
+
+  <p><b>指标二：该拒的拒没拒。</b>下面这张图里，每个点是一道题，横轴是它和最像那段政策的相似度。绿色是政策里有答案的题（只画了最低的那道），红色是政策里没有的 12 道。竖线是拒答阈值：线左边的会被拒答。</p>
+  <div class="plot">
+    <svg viewBox="0 0 640 210" role="img" aria-label="没政策的12道题和阈值0.55的位置">
+      <line x1="40" y1="150" x2="620" y2="150" stroke="var(--line)" stroke-width="2"/>
+      <!-- scale: 0.40 -> 40, 0.70 -> 620 ; x = 40 + (s-0.40)/0.30*580 -->
+      <g class="muted">
+        <text x="40" y="172" text-anchor="middle" class="muted">0.40</text>
+        <text x="136.7" y="172" text-anchor="middle" class="muted">0.45</text>
+        <text x="233.3" y="172" text-anchor="middle" class="muted">0.50</text>
+        <text x="426.7" y="172" text-anchor="middle" class="muted">0.60</text>
+        <text x="523.3" y="172" text-anchor="middle" class="muted">0.65</text>
+        <text x="620" y="172" text-anchor="middle" class="muted">0.70</text>
+      </g>
+      <line x1="330" y1="30" x2="330" y2="158" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4"/>
+      <text x="330" y="22" text-anchor="middle" fill="var(--accent)" style="fill:var(--accent);font-weight:700">阈值 0.55</text>
+      <text x="185" y="44" text-anchor="middle" class="muted">← 被拒答</text>
+      <text x="480" y="44" text-anchor="middle" class="muted">放行给模型 →</text>
+      <!-- no-policy dots, y stacked to avoid overlap -->
+      <circle cx="59.3" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="98" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="165.7" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="231.4" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="241.1" cy="114" r="6" fill="var(--bad)"/>
+      <circle cx="324.2" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="343.5" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="343.5" cy="114" r="6" fill="var(--bad)"/>
+      <circle cx="386.1" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="418.9" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="420.9" cy="114" r="6" fill="var(--bad)"/>
+      <circle cx="554.3" cy="130" r="6" fill="var(--bad)"/>
+      <circle cx="366.7" cy="88" r="7" fill="var(--accent)"/>
+      <text x="366.7" y="74" text-anchor="middle" style="fill:var(--accent)">有政策的最低分 0.569</text>
+      <text x="554.3" y="108" text-anchor="middle" style="fill:var(--bad)">退差价 0.666</text>
+      <text x="59.3" y="100" text-anchor="middle" class="muted">天气 0.41</text>
+      <text x="40" y="200" class="muted">红点：12 道政策里没有的题（有一个点是两道题并列 0.557）</text>
+    </svg>
+  </div>
+  <p>读图：阈值 0.55 时，左边 6 个红点被代码直接拒答；右边 6 个红点（比如「退差价」0.666、「预约周末送货」0.597）放行了，要靠第二道关（提示词）兜底。绿点 0.569 在线右边，说明<b>所有有答案的题一道都没被误拒</b>。</p>
+  <p>为什么不把线再往右挪？挪到 0.60，红点只剩 1 个漏网，但会误拒 3 道本来有答案的题。客服场景里，「明明有规定却说没有」比「多让模型看一眼」更伤用户，所以选 0.55，再用提示词补漏。</p>
+  <div class="skills"><span>RAG</span><span>文档切分</span><span>Embedding</span><span>向量库 Qdrant</span><span>BM25 / RRF 对照实验</span><span>拒答阈值</span><span>引用出处</span><span>离线评测</span></div>
+  <div class="say"><b>面试这么说：</b>政策问题走 RAG：按条款切分、向量检索、带出处回答。我做了混合检索，但评测显示只用向量 Recall@4 是 1.00、混合反而 0.96，所以默认只用向量。拒答分两道关：相似度低于 0.55 代码直接不给条款；放行的再由提示词要求「条款没回答就说没有」。阈值是用 63 道标注题选出来的。</div>
+</section>
+
+<section class="step" id="tech">
+  <div class="eyebrow">回头看</div>
+  <h2>每个技术解决什么问题</h2>
+  <p>如果面试官问「你为什么用 X」，答案都在下面。答不出「没有它会怎样」的技术，就不该出现在项目里。</p>
+  <div class="techs">
+    <div class="tech"><b>Function Calling</b><span>让模型能「打电话查数据」。<small>没有它：模型只能凭记忆回答订单问题，必然编造。</small></span></div>
+    <div class="tech"><b>FastAPI</b><span>把 agent 变成网站能调用的接口；依赖注入让各部分可替换。<small>没有它：只能命令行跑，也很难离线测试。</small></span></div>
+    <div class="tech"><b>Pydantic</b><span>校验请求和工具参数，<code>extra="forbid"</code> 挡住越权参数。<small>没有它：要手写一堆 if 判断，漏一个就是漏洞。</small></span></div>
+    <div class="tech"><b>转发 sessionid</b><span>复用商城的登录和权限判断。<small>没有它：agent 要自己维护一套权限，两套规则迟早不一致。</small></span></div>
+    <div class="tech"><b>Redis</b><span>存对话历史、给对话加锁、自动过期。<small>没有它：不能追问；或者信任前端传的历史，可被伪造。</small></span></div>
+    <div class="tech"><b>向量检索</b><span>按「意思」找政策条款。<small>没有它：「盒子破了」搜不到「外包装破损」。</small></span></div>
+    <div class="tech"><b>BM25 + RRF</b><span>关键词检索和融合，作为对照实验保留。<small>评测证明它在这份数据上帮倒忙，所以默认关闭。</small></span></div>
+    <div class="tech"><b>评测脚本</b><span>用数字回答「改完变好还是变坏」。<small>没有它：调参数全凭感觉，面试也说不清效果。</small></span></div>
+    <div class="tech"><b>假模型 / 假商城</b><span>测试不连网、不花钱，结果稳定。<small>没有它：每次测试都要起商城、调 DeepSeek，又慢又不可重复。</small></span></div>
+  </div>
+  <h3>工程能力体现在哪</h3>
+  <ul>
+    <li><b>安全边界放在代码里，不放在提示词里：</b>身份、权限、拒答第一道关都是代码判断，提示词只做兜底。</li>
+    <li><b>失败有分级：</b>未登录 401、不是你的 404、商城或模型挂了 502、超时 504、正在处理 409。前端能给出对的提示，排查也容易。</li>
+    <li><b>并发和一致性：</b>对话锁、锁比超时长、整轮保存，这些和你项目一里的库存锁是同一类问题。</li>
+    <li><b>用数据做决定：</b>混合检索做了，但评测说不该默认用，就关掉，并写成设计决策记录（ADR 0013）。</li>
+    <li><b>可测试：</b>74 个离线测试，加上真实商城和真实模型的联调。</li>
+  </ul>
+</section>
+
+<section class="step" id="next">
+  <div class="eyebrow">接下来 · 堵「乱动订单」</div>
+  <h2>下一步安排</h2>
+  <div class="road">
+    <div class="now"><b>第 5 步：取消订单，先确认再执行（LangGraph）</b><br>
+      业务：用户说「帮我取消那张没付款的订单」。<br>
+      风险：模型理解错了就把订单取消了；用户连点两次就重复操作。<br>
+      方案：模型只负责<b>提议</b>（「要取消订单 A1001 吗？」），流程暂停；用户点确认后才真的调用商城的取消接口。LangGraph 的作用就是「暂停在这里、等用户确认、再从这里继续」，并把暂停时的状态存起来。<br>
+      已经查清的商城规则：待付款、已付款未发货的订单能取消；已发货、已完成、已过期的不能（返回 409）；重复取消返回原订单、不会重复退款。所以确认流程里要处理好「确认时订单状态已经变了」这种情况。</div>
+    <div><b>第 6 步：演示模式 + Docker + MCP，和项目一解耦</b><br>
+      业务：面试官问「这不就是商城的一个功能吗」，或者别人想跑起来看看，却没有你的商城。<br>
+      方案：工具背后抽一层「业务系统接口」，你的商城是一种实现，内置的演示商城（假数据）是另一种，接真实商城只是换一个实现；用 Docker Compose 一条命令把 agent 和 Redis 起起来；再把业务工具做成 MCP 服务，别的 agent 客户端也能接。</div>
+    <div><b>第 7 步：端到端评测和链路追踪</b><br>
+      第 4 步只测了检索；这一步测整条链路：工具选得对不对、参数对不对、该拒答时拒没拒、出处对不对、被提示注入时守不守得住。回答有没有编造，用另一个大模型来打分（LLM-as-judge）。再记录每一轮的调用链、耗时和 token 成本，出了错能查到是哪一步。</div>
+    <div><b>最后：模拟面试</b><br>
+      用 /grill-me 按这份手册的顺序追问一轮，答不上来的地方再补进手册。</div>
+  </div>
+  <h3>建议的学习顺序</h3>
+  <ol>
+    <li>先只读每一步的「业务场景」和「类比」，能用自己的话说出五步各解决什么问题。</li>
+    <li>再看「第 2 步」和「第 4 步」的代码讲解，这两步最常被追问。</li>
+    <li>最后把每一步的「面试这么说」念出来，念不顺的地方就是还没懂的地方，回来问我。</li>
+  </ol>
+</section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+try { if (window.hljs) { document.querySelectorAll("pre code").forEach(function (el) { window.hljs.highlightElement(el); }); } } catch (e) {}
+</script>
