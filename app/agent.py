@@ -43,6 +43,7 @@ SYSTEM_PROMPT = (
     "用户明确要取消某张订单时，先弄清是哪一张（需要的话先查订单），再调用 cancel_order，不用先查政策。"
     "cancel_order 会先请用户在页面上确认：你不要自己追问「确定吗」，拿到结果之前也不要说已经取消。一次只取消一张。"
     "cancel_order 返回 canceled 为 true 才是取消成功；为 false 或 null 时，把 reason 照实告诉用户。"
+    "返回 declined 为 true 是用户自己点了「不取消」，不是出错：告诉用户订单保持原样就行，不要说成取消失败。"
 )
 GIVE_UP_REPLY = "抱歉，这个问题我暂时处理不了，请换个说法再试试。"
 ONE_AT_A_TIME = "错误：一次只能取消一张订单。等前一张处理完，再取消这一张"
@@ -178,7 +179,7 @@ async def execute(state: RoundState, runtime: Runtime[AgentContext]) -> dict:
             canceled = None if isinstance(e, DjangoOutcomeUnknown) else False
             result, outcome = {"canceled": canceled, "reason": e.message}, f"error:{type(e).__name__}"
     else:
-        result, outcome = {"canceled": False, "reason": "用户选择了不取消"}, "rejected"
+        result, outcome = {"canceled": False, "declined": True, "reason": "用户点了「不取消」，订单保持原样"}, "rejected"
     audit(
         "cancel_decided",
         user_id=ctx.tools.user.id,

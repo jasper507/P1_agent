@@ -98,7 +98,8 @@ def test_reject_leaves_order_alone(client, fake_llm, fake_django):
     r = confirm(client, first, decision="reject")
 
     assert r.json()["reply"] == "好的，订单给你留着。"
-    assert tool_result(fake) == {"canceled": False, "reason": "用户选择了不取消"}
+    # 联调时模型把「不取消」说成了「没有取消成功」，所以结果里明说这是用户自己选的
+    assert tool_result(fake) == {"canceled": False, "declined": True, "reason": "用户点了「不取消」，订单保持原样"}
     assert fake_django.cancels() == [] and fake_django.orders[1][0]["status"] == "PENDING_PAYMENT"
 
 
