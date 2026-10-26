@@ -15,7 +15,14 @@ class ToolCallRecord(BaseModel):
     ok: bool
 
 
+class Source(BaseModel):
+    id: str
+    citation: str
+    text: str
+
+
 class ChatResponse(BaseModel):
     conversation_id: UUID
     reply: str
     tool_calls: list[ToolCallRecord]
+    sources: list[Source]  # 这一轮真正查到的售后政策条款，由服务端给出，不是模型自己写的

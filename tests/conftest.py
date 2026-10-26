@@ -7,7 +7,8 @@ from app.conversations import ConversationStore, get_conversations
 from app.django_client import get_django
 from app.llm import get_llm
 from app.main import app
-from tests.fakes import FakeDjango, FakeLLM
+from app.policy_search import get_policy_index
+from tests.fakes import FakeDjango, FakeLLM, make_policy_index
 
 
 @pytest.fixture
@@ -28,7 +29,13 @@ def redis_db(redis_server):
 
 
 @pytest.fixture
-def client(fake_django, redis_server):
+def policy_index():
+    """用测试小政策和假向量模型建的真索引：切段、Qdrant、BM25、合并都是真代码。"""
+    return make_policy_index()
+
+
+@pytest.fixture
+def client(fake_django, redis_server, policy_index):
     # 测试不读真的 .env：用假 key，最多跑 3 轮；电商后端换成假的
     app.dependency_overrides[get_settings] = lambda: Settings(
         deepseek_api_key="test-key", agent_max_steps=3, _env_file=None
@@ -41,6 +48,7 @@ def client(fake_django, redis_server):
         ttl_seconds=1800, max_rounds=3, lock_seconds=120,
     )
     app.dependency_overrides[get_conversations] = lambda: store
+    app.dependency_overrides[get_policy_index] = lambda: policy_index
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

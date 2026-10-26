@@ -4,7 +4,9 @@
 
 - `step0\`：最小的 agent 循环，一个脚本，用来理解原理
 - `app\`：真正的服务，从第 1 步开始，后面每一步都在它上面改
-- `tests\`：`app\` 的离线测试，用假的 LLM 和假的电商后端，不连网、不花钱
+- `tests\`：`app\` 的离线测试，用假的 LLM、假的电商后端和假的向量模型，不连网、不花钱
+- `policies\`：售后政策（示例商城的虚构政策），第 4 步用
+- `evals\`：检索评测，第 4 步用
 
 ## 准备（Windows PowerShell，只做一次）
 
@@ -77,4 +79,23 @@ Redis 不在本机 6379 的话，在 `.env` 里加一行 `REDIS_URL=redis://...`
 
 ```powershell
 docker compose -p p1-agent down
+```
+
+## 第 4 步：售后政策问答
+
+售后政策放在 `policies\`，是一份示例商城的虚构政策。服务启动时把政策按条款切段，用本机的向量模型 bge-small-zh-v1.5 算向量、放进内存里的 Qdrant。模型遇到售后问题会调用 `search_policy`，交给模型最相关的 4 条；最高相似度低于阈值（0.55），就告诉模型政策里没有相关规定。
+
+关键词检索（jieba 分词加 BM25）和按名次合并（RRF）也写好了，但评测里合并反而丢分，所以默认关着。想打开就在 `.env` 里加一行 `POLICY_HYBRID=true`。
+
+第一次启动会下载向量模型（约 90 MB）到 `.cache\fastembed\`，之后不再下载。
+
+试一下：按第 3 步启动 Redis、电商项目和 agent，在 http://127.0.0.1:8000/docs 调 `POST /api/chat`：
+
+- `{"message": "耳机坏了能保修吗？"}`：回答里带出处；响应里的 `sources` 是这一轮真正查到的条款
+- `{"message": "可以分期付款吗？"}`：政策里没有，客服会建议联系人工客服
+
+检索评测，只跑检索、不调大模型、不花钱，说明和最近一次的结果见 `evals\README.md`：
+
+```powershell
+.venv\Scripts\python -m evals.eval_retrieval
 ```

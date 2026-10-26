@@ -1,6 +1,7 @@
+import asyncio
 import json
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 from uuid import UUID
 
@@ -8,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.auth import CurrentUser
 from app.django_client import DjangoClient, DjangoError
+from app.policy_chunks import Chunk
+from app.policy_search import PolicyIndex
 
 # 和 Django 的 Order.Status 保持一致
 OrderStatus = Literal["PENDING_PAYMENT", "PAID", "SHIPPED", "COMPLETED", "CANCELED", "EXPIRED"]
@@ -22,6 +25,8 @@ class ToolContext:
 
     user: CurrentUser
     django: DjangoClient
+    policies: PolicyIndex
+    sources: list[Chunk] = field(default_factory=list)  # 这一轮 search_policy 真正查到的条款，跑完由接口返回
 
 
 # 模型能传的参数，只有这些。extra="forbid"：多传一个字段（比如 user_id）就算参数错误。
@@ -36,6 +41,12 @@ class GetOrderDetailArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     order_id: UUID = Field(description="订单号，即 list_my_orders 返回的 order_id")
+
+
+class SearchPolicyArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=100, description="要查的售后问题，写成一句完整的话，比如「签收后几天内可以无理由退货」")
 
 
 def summarize_order(order: dict) -> dict:
@@ -89,6 +100,16 @@ async def get_order_detail(ctx: ToolContext, args: GetOrderDetailArgs) -> dict:
     }
 
 
+async def search_policy(ctx: ToolContext, args: SearchPolicyArgs) -> dict:
+    # 向量模型在 CPU 上算，放到线程里跑，免得卡住同时在处理的其他请求
+    result = await asyncio.to_thread(ctx.policies.search, args.query)
+    if not result.chunks:
+        return {"found": False, "message": "售后政策里没有找到和这个问题相关的规定"}
+    # 出处以这里记下的为准，接口原样返回给前端；模型在回答里标错了，也不影响这份列表
+    ctx.sources.extend(result.chunks)
+    return {"found": True, "clauses": [{"citation": c.citation, "text": c.text} for c in result.chunks]}
+
+
 @dataclass(frozen=True)
 class Tool:
     name: str
@@ -123,6 +144,13 @@ TOOLS = {
             "查询当前登录用户某一张订单的详情：金额明细、商品、收货地区",
             GetOrderDetailArgs,
             get_order_detail,
+        ),
+        Tool(
+            "search_policy",
+            "查询本店的售后政策（退换货、退款、取消订单、运费、发票、保修），返回最相关的几条条款和出处；"
+            "政策里没有相关规定时 found 为 false",
+            SearchPolicyArgs,
+            search_policy,
         ),
     ]
 }

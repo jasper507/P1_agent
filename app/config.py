@@ -1,7 +1,10 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -25,6 +28,14 @@ class Settings(BaseSettings):
     conversation_max_rounds: int = 10  # 只留最近 10 轮
     conversation_lock_seconds: int = 120  # 一轮最多占着对话这么久，进程崩了锁也会自己消失
     round_timeout_seconds: float = 90  # 一轮最多跑这么久，超时就放弃。必须比对话锁短，见 ADR 0009
+
+    # 售后政策检索，见 ADR 0011、0013、0014
+    policy_dir: Path = PROJECT_ROOT / "policies"
+    embedding_model: str = "BAAI/bge-small-zh-v1.5"
+    embedding_cache_dir: Path = PROJECT_ROOT / ".cache" / "fastembed"  # 向量模型第一次用时下载到这里
+    policy_top_k: int = 4  # 给模型几段
+    policy_min_score: float = 0.55  # 向量那一路的最高相似度低于它就拒答。用评测题定，见 evals/README.md
+    policy_hybrid: bool = False  # 是否再和关键词检索合并。评测里合并反而丢分，默认不合并
 
     @model_validator(mode="after")
     def round_ends_before_lock_expires(self):

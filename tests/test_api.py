@@ -65,6 +65,7 @@ def test_chat_uses_logged_in_user(client, fake_llm, fake_django):
     body = r.json()
     assert body["reply"] == "你有一张已付款订单。"
     assert body["tool_calls"] == [{"name": "list_my_orders", "arguments": "{}", "ok": True}]
+    assert body["sources"] == []  # 没查政策，就没有出处
     tool_result = fake.requests[1][-1]
     assert tool_result["tool_call_id"] == "call_1"
     assert uuid_for(201) in tool_result["content"] and uuid_for(101) not in tool_result["content"]

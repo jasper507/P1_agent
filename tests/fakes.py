@@ -1,4 +1,4 @@
-"""测试用的假货：假 LLM 按顺序返回预设的回复，假电商后端照着 Django 视图的行为回 JSON。都不连网。"""
+"""测试用的假货：假 LLM 按顺序返回预设的回复，假电商后端照着 Django 视图的行为回 JSON，假向量模型按关键词出向量。都不连网。"""
 import asyncio
 import re
 from http.cookies import SimpleCookie
@@ -7,6 +7,8 @@ from types import SimpleNamespace
 import httpx2 as httpx
 
 from app.django_client import DjangoClient, make_django_client
+from app.policy_chunks import chunk_markdown
+from app.policy_search import PolicyIndex
 
 
 def tool_call(call_id, name, arguments):
@@ -145,3 +147,66 @@ class FakeDjango:
 
     def pages_requested(self):
         return [r.url.params.get("page") for r in self.requests if r.url.path == "/api/orders/"]
+
+
+class FakeEmbedder:
+    """假的向量模型：每组近义词占一维，文本里出现几次就记几；一个都没出现，就落在最后的「其他」那一维。
+
+    所以「坏了能修吗」和写着「保修」「维修」的条款方向一致，和别的条款不沾边，够用来测检索流程，又不用下载模型。
+    """
+
+    GROUPS = [("退货", "退"), ("运费", "寄回"), ("发票",), ("保修", "维修", "修", "坏", "故障")]
+
+    def embed_documents(self, texts):
+        return [self._vector(t) for t in texts]
+
+    def embed_query(self, text):
+        return self._vector(text)
+
+    def _vector(self, text):
+        counts = [float(sum(text.count(word) for word in group)) for group in self.GROUPS]
+        return counts + [0.0 if any(counts) else 1.0]
+
+
+# 测试用的小政策：三篇、六条。真正的政策在 policies/ 里，改了它也不影响这些测试
+TEST_POLICIES = {
+    "returns": """# 退换货政策
+
+示例说明，不进索引。
+
+## 1. 七天无理由退货
+
+### 1.1 适用条件
+
+签收之日起七天内，商品完好的，可以申请无理由退货。
+
+### 1.2 不支持的商品
+
+定制商品不支持无理由退货。
+
+## 2. 退货运费
+
+无理由退货的寄回运费由买家承担。
+""",
+    "invoices": """# 发票政策
+
+## 1. 普通发票
+
+所有订单都可以开电子普通发票。
+
+## 2. 增值税专用发票
+
+企业用户可以申请增值税专用发票，需要提供税号。
+""",
+    "warranty": """# 保修政策
+
+## 1. 保修期限
+
+数码配件签收后保修一年，期间出现故障免费维修。
+""",
+}
+
+
+def make_policy_index(top_k=4, min_score=0.5, hybrid=False):
+    chunks = [c for doc_id, markdown in TEST_POLICIES.items() for c in chunk_markdown(doc_id, markdown)]
+    return PolicyIndex(chunks, FakeEmbedder(), top_k=top_k, min_score=min_score, hybrid=hybrid)

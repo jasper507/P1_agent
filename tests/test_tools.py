@@ -5,7 +5,7 @@ import pytest
 
 from app.auth import CurrentUser
 from app.tools import TOOLS, ToolContext, execute_tool
-from tests.fakes import SESSION_U1, FakeDjango, make_order, uuid_for
+from tests.fakes import SESSION_U1, FakeDjango, make_order, make_policy_index, uuid_for
 
 
 @pytest.fixture
@@ -13,14 +13,18 @@ def fake_django():
     return FakeDjango()
 
 
+def make_ctx(fake_django):
+    user = CurrentUser(id=1, username="xiaoming", session_id=SESSION_U1)
+    return ToolContext(user=user, django=fake_django.client(), policies=make_policy_index())
+
+
 def run(fake_django, name, raw_args):
     """以小明的身份执行一次工具调用。"""
-    ctx = ToolContext(user=CurrentUser(id=1, username="xiaoming", session_id=SESSION_U1), django=fake_django.client())
-    return asyncio.run(execute_tool(name, raw_args, ctx))
+    return asyncio.run(execute_tool(name, raw_args, make_ctx(fake_django)))
 
 
 def test_schemas_do_not_expose_identity():
-    for name, expected in [("list_my_orders", ["status"]), ("get_order_detail", ["order_id"])]:
+    for name, expected in [("list_my_orders", ["status"]), ("get_order_detail", ["order_id"]), ("search_policy", ["query"])]:
         params = TOOLS[name].schema()["function"]["parameters"]
         assert list(params["properties"]) == expected
         assert params["additionalProperties"] is False

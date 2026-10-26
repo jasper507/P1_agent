@@ -13,7 +13,8 @@ from app.config import Settings, get_settings
 from app.conversations import ConversationError, ConversationStore, get_conversations
 from app.django_client import DjangoClient, get_django
 from app.llm import get_llm
-from app.schemas import ChatRequest, ChatResponse
+from app.policy_search import PolicyIndex, get_policy_index
+from app.schemas import ChatRequest, ChatResponse, Source
 from app.tools import ToolContext
 
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 启动时就把政策索引建好：第一个用户不用等，模型下载失败也在启动时就暴露。
+    # 测试里 get_policy_index 被换成了假的，这里拿到的也是假的
+    app.dependency_overrides.get(get_policy_index, get_policy_index)()
     yield
     # 服务关闭时关掉三个连接池。只关真正创建过的：测试里它们被换成了假的，从没创建
     if get_django.cache_info().currsize:
@@ -55,10 +59,12 @@ async def chat(
     llm: AsyncOpenAI = Depends(get_llm),
     django: DjangoClient = Depends(get_django),
     conversations: ConversationStore = Depends(get_conversations),
+    policies: PolicyIndex = Depends(get_policy_index),
     settings: Settings = Depends(get_settings),
 ):
     # 没带编号就是新对话：编号由服务端生成，第一轮跑完才真正存进 Redis
     conversation_id = body.conversation_id or uuid4()
+    ctx = ToolContext(user=user, django=django, policies=policies)
     async with conversations.lock(conversation_id):
         history = [] if body.conversation_id is None else await conversations.load(conversation_id, user.id)
         try:
@@ -67,7 +73,7 @@ async def chat(
                 result = await run_agent(
                     llm,
                     model=settings.deepseek_model,
-                    ctx=ToolContext(user=user, django=django),
+                    ctx=ctx,
                     history=history,
                     message=body.message,
                     max_steps=settings.agent_max_steps,
@@ -81,4 +87,8 @@ async def chat(
             raise HTTPException(status_code=504, detail="这次处理太久了，请稍后再试") from e
         await conversations.save_round(conversation_id, user.id, history, result.new_round)
 
-    return ChatResponse(conversation_id=conversation_id, reply=result.reply, tool_calls=result.tool_calls)
+    # 同一条款被查到两次，只返回一次
+    sources = {(c.id, c.text): Source(id=c.id, citation=c.citation, text=c.text) for c in ctx.sources}
+    return ChatResponse(
+        conversation_id=conversation_id, reply=result.reply, tool_calls=result.tool_calls, sources=list(sources.values())
+    )
