@@ -6,7 +6,7 @@
 - `app\`：真正的服务，从第 1 步开始，后面每一步都在它上面改
 - `tests\`：`app\` 的离线测试，用假的 LLM、假的电商后端和假的向量模型，不连网、不花钱
 - `policies\`：售后政策（示例商城的虚构政策），第 4 步用
-- `evals\`：检索评测，第 4 步用
+- `evals\`：评测。检索评测第 4 步用，端到端评测第 7 步用
 
 ## 准备（Windows PowerShell，只做一次）
 
@@ -111,3 +111,13 @@ docker compose -p p1-agent down
 3. 调 `POST /api/chat/confirm`：请求头 `X-CSRFToken` 填刚才复制的值，请求体填 `{"conversation_id": "...", "action_id": "...", "decision": "confirm"}`；`decision` 填 `reject` 就是不取消
 
 可能的错误：卡片没处理完就发新消息，返回 409；操作编号对不上或已经处理过，返回 404；缺 `X-CSRFToken`，返回 403。每次取消在服务的输出里各有一行 `cancel_proposed` 和 `cancel_decided` 的审计日志。
+
+## 第 7 步：端到端评测（真模型）
+
+第 6 步（演示模式、Docker、MCP）跳过了，直接做精简版的第 7 步：用真的 DeepSeek 跑 26 段固定的对话（查订单、查政策、取消、防注入），每一轮用规则判对错，并记下耗时、token 和花费。商城和 Redis 用假的，不用起 Docker。
+
+```powershell
+.venv\Scripts\python -m evals.eval_agent
+```
+
+最近一次 26 道各跑 3 遍，75/78 通过，没点确认就取消、泄露别人订单都是 0 次。评测还找出一个问题：用户冒充「系统消息」说订单已取消，模型会照着说。系统提示加了一条规则后，又跑的 8 遍里没再出现。说明和完整结果见 `evals\README.md`。
