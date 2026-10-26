@@ -173,16 +173,17 @@ def test_give_up_round_keeps_only_question_and_reply(client, fake_llm, redis_db)
 
 def test_round_that_runs_too_long_is_abandoned(client, fake_llm, redis_db):
     fake_llm([assistant(content="你好"), HANG, assistant(content="在的")])
-    app.dependency_overrides[get_settings] = lambda: Settings(
-        deepseek_api_key="test-key", agent_max_steps=3, round_timeout_seconds=0.2, _env_file=None
-    )
     login(client, SESSION_U1)
     conversation_id = chat(client, "你好").json()["conversation_id"]
+    # 只给卡住的这一轮 0.2 秒。其他轮不限：第一次跑要加载 LangGraph，慢的电脑上会超过 0.2 秒
+    normal = app.dependency_overrides[get_settings]
+    app.dependency_overrides[get_settings] = lambda: normal().model_copy(update={"round_timeout_seconds": 0.2})
     r = chat(client, "我有哪些订单？", conversation_id)
     assert r.status_code == 504
     assert r.json() == {"detail": "这次处理太久了，请稍后再试"}
     assert len(stored_rounds(redis_db, conversation_id)) == 1  # 没跑完的这轮不存
     assert redis_db.keys("*:lock") == []
+    app.dependency_overrides[get_settings] = normal
     assert chat(client, "在吗？", conversation_id).status_code == 200
 
 

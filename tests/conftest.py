@@ -35,10 +35,11 @@ def policy_index():
 
 
 @pytest.fixture
-def client(fake_django, redis_server, policy_index):
-    # 测试不读真的 .env：用假 key，最多跑 3 轮；电商后端换成假的
+def client(fake_django, redis_server, policy_index, tmp_path):
+    # 测试不读真的 .env：用假 key，最多跑 3 轮；电商后端换成假的。
+    # 等用户确认时的断点用真的 SQLite checkpointer，只是文件放在每个测试自己的临时目录里
     app.dependency_overrides[get_settings] = lambda: Settings(
-        deepseek_api_key="test-key", agent_max_steps=3, _env_file=None
+        deepseek_api_key="test-key", agent_max_steps=3, checkpoint_path=tmp_path / "checkpoints.sqlite", _env_file=None
     )
     fake_client = fake_django.client()
     app.dependency_overrides[get_django] = lambda: fake_client

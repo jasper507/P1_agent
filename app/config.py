@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     conversation_max_rounds: int = 10  # 只留最近 10 轮
     conversation_lock_seconds: int = 120  # 一轮最多占着对话这么久，进程崩了锁也会自己消失
     round_timeout_seconds: float = 90  # 一轮最多跑这么久，超时就放弃。必须比对话锁短，见 ADR 0009
+    # 一轮停下来等用户确认时，LangGraph 把状态存在这个 SQLite 文件里，见 ADR 0017
+    checkpoint_path: Path = PROJECT_ROOT / ".data" / "checkpoints.sqlite"
 
     # 售后政策检索，见 ADR 0011、0013、0014
     policy_dir: Path = PROJECT_ROOT / "policies"

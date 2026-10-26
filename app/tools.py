@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.auth import CurrentUser
+from app.auth import CsrfTokens, CurrentUser
 from app.django_client import DjangoClient, DjangoError
 from app.policy_chunks import Chunk
 from app.policy_search import PolicyIndex
@@ -26,6 +26,7 @@ class ToolContext:
     user: CurrentUser
     django: DjangoClient
     policies: PolicyIndex
+    csrf: CsrfTokens | None = None  # 只有用户点确认的那个请求才有，取消订单要用
     sources: list[Chunk] = field(default_factory=list)  # 这一轮 search_policy 真正查到的条款，跑完由接口返回
 
 
@@ -41,6 +42,12 @@ class GetOrderDetailArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     order_id: UUID = Field(description="订单号，即 list_my_orders 返回的 order_id")
+
+
+class CancelOrderArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    order_id: UUID = Field(description="要取消的订单号，即 list_my_orders 返回的 order_id")
 
 
 class SearchPolicyArgs(BaseModel):
@@ -115,7 +122,8 @@ class Tool:
     name: str
     description: str
     args_model: type[BaseModel]
-    func: Callable[[ToolContext, Any], Awaitable[Any]]
+    # 要用户确认的工具没有 func：模型调用它时 agent 先暂停，用户点了确认再由 app/cancel_order.py 执行
+    func: Callable[[ToolContext, Any], Awaitable[Any]] | None
 
     def schema(self) -> dict:
         """给模型看的工具说明，参数部分直接由 Pydantic 模型生成，不用手写第二份。"""
@@ -152,9 +160,25 @@ TOOLS = {
             SearchPolicyArgs,
             search_policy,
         ),
+        Tool(
+            "cancel_order",
+            "取消当前登录用户的一张订单。调用后不会马上取消：页面会先请用户确认，用户点了确认才执行。"
+            "返回 canceled 为 true 才是取消成功",
+            CancelOrderArgs,
+            None,
+        ),
     ]
 }
 TOOL_SCHEMAS = [tool.schema() for tool in TOOLS.values()]
+
+
+def parse_args(args_model: type[BaseModel], raw_args: str | None) -> tuple[Any, str | None]:
+    """校验模型传来的参数。不对的话返回一段说明，交还给模型让它改。"""
+    try:
+        return args_model.model_validate_json(raw_args or "{}"), None
+    except ValidationError as e:
+        problems = "; ".join(f"{'.'.join(map(str, err['loc'])) or '参数'}: {err['msg']}" for err in e.errors())
+        return None, f"参数错误：{problems}"
 
 
 async def execute_tool(name: str, raw_args: str | None, ctx: ToolContext) -> tuple[str, bool]:
@@ -166,11 +190,12 @@ async def execute_tool(name: str, raw_args: str | None, ctx: ToolContext) -> tup
     tool = TOOLS.get(name)
     if tool is None:
         return f"错误：没有名为 {name} 的工具", False
-    try:
-        args = tool.args_model.model_validate_json(raw_args or "{}")
-    except ValidationError as e:
-        problems = "; ".join(f"{'.'.join(map(str, err['loc'])) or '参数'}: {err['msg']}" for err in e.errors())
-        return f"参数错误：{problems}", False
+    if tool.func is None:
+        # 走到这里说明调用方漏掉了确认这一步。宁可报错，也不能不经确认就执行
+        return f"错误：{name} 要等用户确认，不能直接执行", False
+    args, error = parse_args(tool.args_model, raw_args)
+    if error:
+        return error, False
     try:
         result = await tool.func(ctx, args)
     except DjangoError as e:

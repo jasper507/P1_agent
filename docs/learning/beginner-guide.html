@@ -109,6 +109,12 @@ ol.explain li::marker { color: var(--accent); font-family: var(--font-mono); fon
 .road div { padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
 .road b { color: var(--accent); }
 .road .now { border-color: var(--accent); }
+.msg { overflow-wrap: anywhere; }
+.confirm-card { justify-self: start; max-width: 85%; padding: 10px 14px; border: 2px solid var(--amber); border-radius: 10px; background: var(--paper); line-height: 1.6; }
+.confirm-card .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.confirm-card .btns span { padding: 2px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: .9rem; }
+.confirm-card .btns .yes { background: var(--bad); border-color: var(--bad); color: var(--paper); }
+@media (max-width: 640px) { .confirm-card { max-width: 95%; } }
 @media (max-width: 640px) {
   .ba { grid-template-columns: 1fr; }
   .tech { grid-template-columns: 1fr; gap: 4px; }
@@ -121,7 +127,7 @@ ol.explain li::marker { color: var(--accent); font-family: var(--font-mono); fon
 <div class="wrap">
 
 <header>
-  <div class="eyebrow">P1_AGENT · 第 0–4 步</div>
+  <div class="eyebrow">P1_AGENT · 第 0–5 步</div>
   <h1>P1 客服 Agent 学习手册</h1>
   <p class="lede">这份手册只回答三个问题：这个项目到底解决什么问题；每一步为什么要做、和上一步比变了什么；代码一行一行在干什么。读完你应该能用自己的话把整个项目讲一遍。</p>
 </header>
@@ -144,14 +150,15 @@ ol.explain li::marker { color: var(--accent); font-family: var(--font-mono); fon
   </div>
   <p>所以这个项目一句话可以这么说：<b>给自己的电商系统做一个 AI 客服，让它能查订单、答政策、办业务，同时保证它不越权、不编造、不乱操作。</b>技术都是为这三条服务的，不是为了堆名词。</p>
 
-  <h3>五步的路线（每一步多会一件事、多堵一个洞）</h3>
+  <h3>六步的路线（每一步多会一件事、多堵一个洞）</h3>
   <nav class="toc">
     <a href="#s0"><span class="n">0</span><span class="t">最小 agent 循环<small>模型自己决定要不要查订单。理解 agent 的原理。</small></span></a>
     <a href="#s1"><span class="n">1</span><span class="t">做成一个网络服务<small>从脚本变成别人能调用的接口，可以离线测试。</small></span></a>
     <a href="#s2"><span class="n">2</span><span class="t">接上真实登录和真实订单<small>堵「看到别人订单」这个洞。</small></span></a>
     <a href="#s3"><span class="n">3</span><span class="t">记住上下文，支持追问<small>「那第二张呢」能接上；多人同时用也不串。</small></span></a>
     <a href="#s4"><span class="n">4</span><span class="t">按售后政策回答（RAG）<small>堵「瞎编政策」这个洞，并用评测数字证明效果。</small></span></a>
-    <a href="#next"><span class="n">5+</span><span class="t">接下来：取消订单要先确认<small>堵「乱动订单」这个洞。</small></span></a>
+    <a href="#s5"><span class="n">5</span><span class="t">取消订单要先确认<small>堵「乱动订单」这个洞：模型只提议，用户点了才执行。</small></span></a>
+    <a href="#next"><span class="n">6+</span><span class="t">接下来：演示模式、端到端评测、模拟面试<small>没有你的商城也能跑起来；用数字证明整条链路靠谱。</small></span></a>
   </nav>
 </section>
 
@@ -424,6 +431,179 @@ async with conversations.lock(conversation_id):                     # ②
   <div class="say"><b>面试这么说：</b>政策问题走 RAG：按条款切分、向量检索、带出处回答。我做了混合检索，但评测显示只用向量 Recall@4 是 1.00、混合反而 0.96，所以默认只用向量。拒答分两道关：相似度低于 0.55 代码直接不给条款；放行的再由提示词要求「条款没回答就说没有」。阈值是用 63 道标注题选出来的。</div>
 </section>
 
+<section class="step" id="s5">
+  <div class="eyebrow">第 5 步 · 堵「乱动订单」</div>
+  <h2>取消订单要先确认（LangGraph）</h2>
+  <p><b>业务场景：</b>前四步的 agent 只会「查」，这一步第一次让它「办」：帮用户取消订单。查错了顶多答错一句话，取消错了订单就没了，已付款的还会退款。所以规则是：<b>模型只能提议，用户在页面上点了「确认取消」才真的执行。</b></p>
+  <div class="chat">
+    <div class="msg u">帮我把那张没付款的耳机订单取消了。</div>
+    <div class="msg tool">模型 → 调用 list_my_orders(status="PENDING_PAYMENT")，找到耳机那张</div>
+    <div class="msg tool">模型 → 调用 cancel_order(order_id="…")　程序不执行，先查订单、做确认卡片，然后暂停</div>
+    <div class="confirm-card">请确认是否取消这张订单：无线耳机 x1，共 ¥89.00，待付款。取消后订单关闭，不会扣款。
+      <div class="btns"><span class="yes">确认取消</span><span>不取消</span></div></div>
+    <div class="msg u">（点了「确认取消」）</div>
+    <div class="msg tool">程序 → 重新查一次订单，还是待付款 → 调商城的取消接口 → 成功</div>
+    <div class="msg a">已经帮您取消了耳机订单（¥89.00），订单已关闭，不会扣款。</div>
+  </div>
+  <p style="color:var(--muted);font-size:.9rem">卡片是示意：商城的页面这一步没改，联调时在接口文档页 /docs 里发「确认」请求，效果和点按钮一样。</p>
+  <div class="ba">
+    <div class="before"><h4>第 4 步的问题</h4><ul><li>只能查，不能办。用户说「取消」，只能回「请到订单页自己点」</li><li>如果直接给模型一个取消工具，模型一调用就取消了：听错了、选错了单、用户只是问问，都会出事故</li><li>手写的 while 循环没法「停在中间等用户」：一个请求结束，循环里跑到一半的状态就没了</li></ul></div>
+    <div class="after"><h4>第 5 步的改法</h4><ul><li>模型只提议；程序用商城的真实数据做确认卡片，流程暂停</li><li>用户点「确认取消」才执行，点「不取消」就作罢</li><li>循环改成 LangGraph 的一张图，暂停时状态存盘，确认是另一个请求也能接着跑</li><li>执行前再查一次订单；连点两次只取消一次</li></ul></div>
+  </div>
+  <div class="analogy"><b>类比：</b>去银行办转账。柜员（模型）听你说完，把转账单填好递出来：「您核对一下，没问题请签字」。你签了字才办理，不签就作废（确认卡片）。单子在柜台留底，你出去打个电话回来，柜员还能接着办（断点存盘）。真正办理前，柜员再查一眼你的账户，情况变了就请你重新填（执行前复查）。同一张单子只能办一次，你着急递了两次也只转一笔（操作编号）。</div>
+
+  <h3>流程画成图：多了三个节点</h3>
+  <p>第 0 步的 while 循环其实就两件事：调模型、跑工具，来回转，直到模型不再要工具。LangGraph 把这两件事画成两个<b>节点</b>，再在中间插进三个和取消有关的节点：</p>
+  <div class="plot">
+    <svg viewBox="0 0 640 220" role="img" aria-label="LangGraph 流程：调模型、跑工具、查单做卡片、暂停等用户、复查后取消，结果交回模型">
+      <defs>
+        <marker id="arr5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/>
+        </marker>
+      </defs>
+      <text x="10" y="20" style="fill:var(--accent);font-weight:700">回答用户（这一轮结束）</text>
+      <line x1="58" y1="70" x2="58" y2="30" style="stroke:var(--muted);stroke-width:1.5" marker-end="url(#arr5)"/>
+      <g style="fill:var(--paper);stroke:var(--line);stroke-width:1.5">
+        <rect x="10" y="70" width="96" height="46" rx="8"/>
+        <rect x="140" y="70" width="96" height="46" rx="8"/>
+        <rect x="270" y="70" width="96" height="46" rx="8"/>
+        <rect x="530" y="70" width="96" height="46" rx="8"/>
+      </g>
+      <rect x="400" y="70" width="96" height="46" rx="8" style="fill:var(--amber-soft);stroke:var(--amber);stroke-width:2"/>
+      <g text-anchor="middle">
+        <text x="58" y="89" style="font-family:var(--font-mono)">model</text><text x="58" y="107" class="muted">调模型</text>
+        <text x="188" y="89" style="font-family:var(--font-mono)">tools</text><text x="188" y="107" class="muted">跑工具</text>
+        <text x="318" y="89" style="font-family:var(--font-mono)">prepare</text><text x="318" y="107" class="muted">查单做卡片</text>
+        <text x="448" y="89" style="font-family:var(--font-mono);fill:var(--amber)">confirm</text><text x="448" y="107" style="fill:var(--amber)">暂停等用户</text>
+        <text x="578" y="89" style="font-family:var(--font-mono)">execute</text><text x="578" y="107" class="muted">复查后取消</text>
+      </g>
+      <g style="stroke:var(--muted);stroke-width:1.5">
+        <line x1="106" y1="93" x2="138" y2="93" marker-end="url(#arr5)"/>
+        <line x1="236" y1="93" x2="268" y2="93" marker-end="url(#arr5)"/>
+        <line x1="366" y1="93" x2="398" y2="93" marker-end="url(#arr5)"/>
+        <line x1="496" y1="93" x2="528" y2="93" marker-end="url(#arr5)"/>
+      </g>
+      <g text-anchor="middle" class="muted" style="font-size:11px">
+        <text x="123" y="62" class="muted">要工具</text>
+        <text x="253" y="62" class="muted">要取消</text>
+        <text x="383" y="62" class="muted">能取消</text>
+        <text x="513" y="62" class="muted">点了</text>
+      </g>
+      <g style="stroke:var(--muted);stroke-width:1.5;fill:none">
+        <polyline points="188,116 188,160"/>
+        <polyline points="318,116 318,160"/>
+        <polyline points="578,116 578,160 58,160"/>
+        <line x1="58" y1="160" x2="58" y2="118" marker-end="url(#arr5)"/>
+      </g>
+      <text x="448" y="140" text-anchor="middle" style="fill:var(--amber)">状态存进 SQLite</text>
+      <text x="318" y="210" text-anchor="middle" style="fill:var(--fg)">结果都交回模型，由它决定下一步、组织回答</text>
+      <text x="188" y="178" text-anchor="middle" class="muted" style="font-size:11px">普通工具：查完就交回</text>
+      <text x="318" y="178" text-anchor="middle" class="muted" style="font-size:11px">不能取消：把原因交回</text>
+      <text x="548" y="178" text-anchor="middle" class="muted" style="font-size:11px">取消成功、失败或用户不取消</text>
+    </svg>
+  </div>
+  <p>为什么非要用 LangGraph？关键在 confirm 这一格：程序要<b>停在一轮的中间</b>，等用户点按钮，而点按钮是另一个 HTTP 请求，中间可能隔了几分钟，服务甚至可能重启过。LangGraph 的 <code>interrupt()</code> 负责「停」，checkpointer 负责「把停下时的状态存盘、下次读回来」。不用它也能做，但要自己把「跑到一半」的消息、模型要取消哪张单都存起来再拼回去，很容易漏。</p>
+
+  <div class="file">app/agent.py：把循环搭成一张图</div>
+<pre><code class="language-python">graph = StateGraph(RoundState, context_schema=AgentContext)
+graph.add_node("model", call_model)                                          # ①
+graph.add_node("tools", run_tools)
+graph.add_node("prepare", prepare)
+graph.add_node("confirm", confirm)
+graph.add_node("execute", execute)
+graph.add_edge(START, "model")
+graph.add_conditional_edges("model", after_model, ["tools", END])            # ②
+graph.add_conditional_edges("tools", after_tools, ["prepare", "model"])
+graph.add_conditional_edges("prepare", after_prepare, ["confirm", "model"])
+graph.add_edge("confirm", "execute")
+graph.add_edge("execute", "model")
+return graph.compile(checkpointer=checkpointer)                              # ③</code></pre>
+  <ol class="explain">
+    <li><b>节点</b>就是普通的 async 函数：读 <code>state</code>（这一轮跑到哪了：有哪些消息、模型想取消哪张、卡片长什么样），返回要改的那几个字段。<code>model</code> 和 <code>tools</code> 就是以前手写循环拆出来的两半，逻辑没变。</li>
+    <li><b>条件边</b>决定下一步去哪：<code>after_model</code> 看模型的回复里有没有工具调用，有就去 tools，没有就结束、回答用户；<code>after_tools</code> 看模型有没有要取消订单，有就去 prepare。</li>
+    <li><b>checkpointer</b>：每走完一个节点，把 state 存一次盘（这里存在 <code>.data\checkpoints.sqlite</code> 文件里）。登录凭证和连接池放在 <code>AgentContext</code> 里，每次请求传进来，不存盘。</li>
+  </ol>
+
+  <div class="file">app/agent.py：模型要取消时，程序先不执行，然后停下</div>
+<pre><code class="language-python"># run_tools 节点里
+if name == "cancel_order":
+    args, error = parse_args(CancelOrderArgs, raw_args)
+    if error is None and cancel_call is None:
+        cancel_call = {"id": call["id"], "order_id": str(args.order_id), ...}   # ①
+        continue
+    content, ok = error or ONE_AT_A_TIME, False                                 # ②
+
+async def confirm(state: RoundState) -&gt; dict:
+    return {"decision": interrupt(state["card"])}                               # ③</code></pre>
+  <ol class="explain">
+    <li>模型调用 <code>cancel_order</code> 时，程序不去取消，只记下「模型想取消哪一张」。这个工具在 <code>app/tools.py</code> 里干脆<b>没有执行函数</b>，就算哪段代码想绕过确认直接执行，也只会得到「要等用户确认」。</li>
+    <li>订单号格式不对，或者模型一次要取消两张，第二张直接回一句「一次只能取消一张」交还模型。</li>
+    <li><code>interrupt()</code> 让整张图停在这里，把卡片交给接口返回给前端。用户点了以后，第二个请求用 <code>Command(resume="confirm")</code> 恢复，这次 <code>interrupt()</code> 直接返回 <code>"confirm"</code>。有个坑：恢复时 confirm 节点会<b>从头再跑一遍</b>，所以 interrupt 之前不能做查订单、取消订单这种有副作用的事，它们都放在前后的 prepare 和 execute 里。</li>
+  </ol>
+
+  <div class="file">app/cancel_order.py：卡片怎么做，确认后怎么执行</div>
+<pre><code class="language-python">card = {
+    "action_id": uuid.uuid4().hex,                                       # ①
+    "order_id": order["public_id"],
+    "status": status,
+    "items": [f"{item['product_name_snapshot']} x{item['quantity']}" for item in order["items"]],
+    "total": order["total"],                                             # ②
+    "effect": EFFECTS[status].format(total=order["total"]),
+}
+
+async def execute_cancel(ctx, card):
+    order = await ctx.django.get_order(ctx.user.session_id, order_id)
+    if order["status"] != card["status"]:                                # ③
+        return {"canceled": False, "reason": "订单状态变了……"}, "status_changed"
+    try:
+        await ctx.django.cancel_order(ctx.user.session_id, ctx.csrf, order_id)   # ④
+    except DjangoRefused as e:
+        return {"canceled": False, "reason": e.message}, f"refused:{e.code}"
+    return {"canceled": True, ...}, "canceled"</code></pre>
+  <ol class="explain">
+    <li><code>action_id</code> 是这一次操作的编号（32 位随机串），用户点确认时必须带回来。对不上，说明这张卡片已经处理过了（比如连点两次），直接返回 404，不会取消两次。</li>
+    <li>卡片上的商品、金额、状态、「取消后会怎样」全部来自商城的数据，<b>不用模型写的字</b>。模型可能把订单号或金额说错，用户要确认的是真实的订单。已发货、已完成的单，这一步就直接告诉用户不能取消，不弹卡片。</li>
+    <li>执行前<b>再查一次</b>。用户看卡片的时候，可能在另一个页面把这张单付了款：卡片上是「待付款，取消后不会扣款」，现在却是「已付款，取消要退款」，和用户同意的不是一回事。状态不一样就不取消，请用户重新发起。</li>
+    <li>真正调商城的取消接口。能不能取消最终以商城为准：商城说不行（409，比如「支付结果尚未确认」），就把商城的原话交给模型去告诉用户。</li>
+  </ol>
+
+  <div class="file">app/main.py：确认是一个单独的接口</div>
+<pre><code class="language-python">@app.post("/api/chat/confirm", response_model=ChatResponse)
+async def confirm(body: ConfirmRequest,
+                  user: CurrentUser = Depends(get_current_user),
+                  csrf: CsrfTokens = Depends(get_csrf_tokens), ...):          # ①
+    async with conversations.lock(body.conversation_id):                     # ②
+        history = await conversations.load(body.conversation_id, user.id)   # ③
+        card = await pending_card(graph, body.conversation_id)
+        if card is None or card["action_id"] != body.action_id:
+            raise HTTPException(status_code=404, detail="这个确认已经失效，可能已经处理过了")
+        result = await run_round(resume_round(graph, ctx, body.decision), settings)   # ④
+        await save(conversations, body.conversation_id, user.id, history, result)</code></pre>
+  <ol class="explain">
+    <li>确认不走聊天接口，只有用户在页面上点按钮才会发这个请求，模型没法「替用户点确认」。用户在聊天框里打「好的」也不算确认，因为模型得猜这句「好的」指的是哪张单。取消是写操作，商城要求带 CSRF 校验（防止别的网站借用你的登录状态偷偷发请求），agent 把浏览器带来的校验码原样转给商城，由商城判断对不对。</li>
+    <li>和聊天用同一把对话锁。连点两次时，第二次要等第一次处理完，进来发现卡片已经没了，返回 404。卡片还没处理时又发聊天消息，返回 409「请先处理上面的确认」。</li>
+    <li>对话不是你的就 404。所以拿到别人的对话编号和操作编号，也确认不了别人的取消。</li>
+    <li>从停下的地方接着跑：execute 节点取消订单，再回到 model 节点，让模型把结果告诉用户。这一轮跑完才整轮存进 Redis，和第 3 步一样。</li>
+  </ol>
+
+  <h3>还防住了哪些意外</h3>
+  <div class="techs">
+    <div class="tech"><b>服务重启</b><span>暂停的状态存在 SQLite 文件里，重启以后点确认还能接上。<small>测试里换一个全新的服务实例去点确认来验证。</small></span></div>
+    <div class="tech"><b>商城没回复</b><span>取消请求发出去了，但等超时也没回音：可能取消了，也可能没有。<small>这时结果写「不确定」，让模型照实说「请过一会儿查一下订单状态」，不说成功也不说失败。商城对已取消的单再取消一次是安全的，不会重复退款。</small></span></div>
+    <div class="tech"><b>事后追查</b><span>审计日志：提议时记一行 cancel_proposed，用户点了记一行 cancel_decided，都是 JSON。<small>谁、哪段对话、哪张单、什么时候、点了什么、结果如何。只有前一行没有后一行，就是用户没点。不记用户原话和登录凭证。</small></span></div>
+  </div>
+
+  <h3>还没解决的（面试被问到要能说）</h3>
+  <ul>
+    <li>复查和真正取消之间还有一个很短的空档。商城的取消接口不支持「只在待付款时才取消」，这个空档关不掉，最后靠商城自己的行锁和状态检查兜底。</li>
+    <li>用户一直不点，SQLite 里的断点不会自己删（对话 30 分钟后在 Redis 里过期，这张卡片也就点不了了）。上线时可以换成带过期时间的 Redis 来存断点。</li>
+    <li>取消成功后，如果模型组织回答那一步失败（502），订单已经取消，但这一轮对话没存。审计日志里有记录，用户刷新订单也能看到。</li>
+    <li>部署到 HTTPS 以后，Django 还会检查请求来自哪个网址，到时要在商城的配置里把 agent 的地址加进可信来源。</li>
+  </ul>
+  <div class="skills"><span>LangGraph</span><span>状态图</span><span>interrupt 人工确认</span><span>checkpointer 断点</span><span>幂等</span><span>执行前复查</span><span>CSRF</span><span>审计日志</span><span>变异测试</span></div>
+  <div class="say"><b>面试这么说：</b>取消订单是 agent 唯一的写操作，我把手写循环改成了 LangGraph 状态图，加了一个 interrupt 节点：模型只能提议，程序用商城的真实数据生成确认卡片，流程暂停、状态存进 checkpointer。用户点确认是另一个接口，要带回操作编号，从断点恢复执行。执行前重新查一次订单，状态变了就不取消；操作编号加对话锁，连点两次只取消一次；能不能取消最终以商城为准，CSRF 也交给商城校验；每次提议和决定都写审计日志。测试方面，除了 101 个离线测试，我还故意把代码改坏 15 处（比如跳过确认直接取消），确认测试都能发现。</div>
+</section>
+
 <section class="step" id="tech">
   <div class="eyebrow">回头看</div>
   <h2>每个技术解决什么问题</h2>
@@ -438,27 +618,28 @@ async with conversations.lock(conversation_id):                     # ②
     <div class="tech"><b>BM25 + RRF</b><span>关键词检索和融合，作为对照实验保留。<small>评测证明它在这份数据上帮倒忙，所以默认关闭。</small></span></div>
     <div class="tech"><b>评测脚本</b><span>用数字回答「改完变好还是变坏」。<small>没有它：调参数全凭感觉，面试也说不清效果。</small></span></div>
     <div class="tech"><b>假模型 / 假商城</b><span>测试不连网、不花钱，结果稳定。<small>没有它：每次测试都要起商城、调 DeepSeek，又慢又不可重复。</small></span></div>
+    <div class="tech"><b>LangGraph</b><span>把循环画成一张图，能停在中间等用户点确认，再接着跑。<small>没有它：要自己把跑到一半的状态存起来再拼回去，容易漏。</small></span></div>
+    <div class="tech"><b>Checkpointer</b><span>暂停时把这一轮的状态存进 SQLite 文件。<small>没有它：确认是另一个请求，服务一重启就接不上了。</small></span></div>
+    <div class="tech"><b>确认卡片</b><span>卡片内容来自商城的真实订单，带一个只能用一次的操作编号。<small>没有它：模型说错金额用户也会点确认；连点两次可能取消两次。</small></span></div>
+    <div class="tech"><b>转发 CSRF</b><span>写操作要防跨站伪造请求，校验交给商城。<small>没有它：别的网站可以借用你的登录状态发取消请求。</small></span></div>
+    <div class="tech"><b>审计日志</b><span>谁、什么时候、要取消哪张、点了什么、结果如何。<small>没有它：出了纠纷，说不清是用户点的还是模型自己做的。</small></span></div>
   </div>
   <h3>工程能力体现在哪</h3>
   <ul>
     <li><b>安全边界放在代码里，不放在提示词里：</b>身份、权限、拒答第一道关都是代码判断，提示词只做兜底。</li>
-    <li><b>失败有分级：</b>未登录 401、不是你的 404、商城或模型挂了 502、超时 504、正在处理 409。前端能给出对的提示，排查也容易。</li>
+    <li><b>写操作的安全：</b>只提议不执行，用户点了才办；执行前复查；同一个操作只执行一次（幂等）；每一步留审计日志。agent 一碰业务系统，面试最常追问的就是这些。</li>
+    <li><b>失败有分级：</b>未登录 401、不是你的 404、商城或模型挂了 502、超时 504、正在处理或还有确认没点 409。前端能给出对的提示，排查也容易。</li>
     <li><b>并发和一致性：</b>对话锁、锁比超时长、整轮保存，这些和你项目一里的库存锁是同一类问题。</li>
     <li><b>用数据做决定：</b>混合检索做了，但评测说不该默认用，就关掉，并写成设计决策记录（ADR 0013）。</li>
-    <li><b>可测试：</b>74 个离线测试，加上真实商城和真实模型的联调。</li>
+    <li><b>可测试：</b>101 个离线测试，前四步都和真实商城、真实模型联调过。第 5 步还做了变异测试：故意把代码改坏 15 处（比如跳过确认直接取消），15 处都让测试变红了。</li>
   </ul>
 </section>
 
 <section class="step" id="next">
-  <div class="eyebrow">接下来 · 堵「乱动订单」</div>
+  <div class="eyebrow">接下来</div>
   <h2>下一步安排</h2>
   <div class="road">
-    <div class="now"><b>第 5 步：取消订单，先确认再执行（LangGraph）</b><br>
-      业务：用户说「帮我取消那张没付款的订单」。<br>
-      风险：模型理解错了就把订单取消了；用户连点两次就重复操作。<br>
-      方案：模型只负责<b>提议</b>（「要取消订单 A1001 吗？」），流程暂停；用户点确认后才真的调用商城的取消接口。LangGraph 的作用就是「暂停在这里、等用户确认、再从这里继续」，并把暂停时的状态存起来。<br>
-      已经查清的商城规则：待付款、已付款未发货的订单能取消；已发货、已完成、已过期的不能（返回 409）；重复取消返回原订单、不会重复退款。所以确认流程里要处理好「确认时订单状态已经变了」这种情况。</div>
-    <div><b>第 6 步：演示模式 + Docker + MCP，和项目一解耦</b><br>
+    <div class="now"><b>第 6 步：演示模式 + Docker + MCP，和项目一解耦</b><br>
       业务：面试官问「这不就是商城的一个功能吗」，或者别人想跑起来看看，却没有你的商城。<br>
       方案：工具背后抽一层「业务系统接口」，你的商城是一种实现，内置的演示商城（假数据）是另一种，接真实商城只是换一个实现；用 Docker Compose 一条命令把 agent 和 Redis 起起来；再把业务工具做成 MCP 服务，别的 agent 客户端也能接。</div>
     <div><b>第 7 步：端到端评测和链路追踪</b><br>
@@ -468,8 +649,8 @@ async with conversations.lock(conversation_id):                     # ②
   </div>
   <h3>建议的学习顺序</h3>
   <ol>
-    <li>先只读每一步的「业务场景」和「类比」，能用自己的话说出五步各解决什么问题。</li>
-    <li>再看「第 2 步」和「第 4 步」的代码讲解，这两步最常被追问。</li>
+    <li>先只读每一步的「业务场景」和「类比」，能用自己的话说出六步各解决什么问题。</li>
+    <li>再看第 2、4、5 步的代码讲解，这三步最常被追问。</li>
     <li>最后把每一步的「面试这么说」念出来，念不顺的地方就是还没懂的地方，回来问我。</li>
   </ol>
 </section>

@@ -83,8 +83,11 @@ def uuid_for(n):
     return f"00000000-0000-4000-8000-{n:012d}"
 
 
+CSRF_TOKEN = "c" * 32  # 浏览器里 csrftoken cookie 的值。前端把它原样放进 X-CSRFToken 头
+
+
 class FakeDjango:
-    """只模拟 agent 用到的三个接口：/api/auth/me/、订单列表（分页）、订单详情。"""
+    """只模拟 agent 用到的四个接口：/api/auth/me/、订单列表（分页）、订单详情、取消订单。"""
 
     PAGE_SIZE = 20
 
@@ -102,6 +105,9 @@ class FakeDjango:
         self.requests: list[httpx.Request] = []
         self.down = False  # True：连不上，像 Docker 没启动
         self.orders_broken = False  # True：订单接口返回 500
+        self.payment_unresolved: set[str] = set()  # 这些订单有一笔支付还没出结果，商城不让取消
+        self.cancel_hangs = False  # True：取消请求发出去了，但等不到回复
+        self.refunds: list[str] = []  # 已付款订单取消时退了款的订单号
 
     def client(self) -> DjangoClient:
         return make_django_client("http://django.test", timeout=5, transport=httpx.MockTransport(self.handle))
@@ -117,6 +123,10 @@ class FakeDjango:
             return httpx.Response(403, json={"detail": "Authentication credentials were not provided."})
 
         path = request.url.path
+        if request.method == "POST":
+            if match := re.fullmatch(r"/api/orders/([0-9a-f-]{36})/cancel/", path):
+                return self._cancel(request, cookie, user, match.group(1))
+            return httpx.Response(405, json={"detail": "Method not allowed."})
         if path == "/api/auth/me/":
             return httpx.Response(200, json=user)
         if path == "/api/orders/":
@@ -129,6 +139,29 @@ class FakeDjango:
                     return httpx.Response(200, json=order)
             return httpx.Response(404, json={"detail": "订单不存在，或你无权查看这张订单。"})
         return httpx.Response(404, text="Not Found")
+
+    def _cancel(self, request, cookie, user, public_id):
+        """照着商城的 OrderCancelView 和 cancel_order 写：先过 CSRF，再按订单状态决定。"""
+        csrf_cookie = cookie["csrftoken"].value if "csrftoken" in cookie else ""
+        if not csrf_cookie or request.headers.get("x-csrftoken") != csrf_cookie:
+            return httpx.Response(403, json={"detail": "CSRF Failed: CSRF token missing or incorrect."})
+        if self.cancel_hangs:
+            raise httpx.ReadTimeout("timed out", request=request)
+        order = next((o for o in self.orders.get(user["id"], []) if o["public_id"] == public_id), None)
+        if order is None:
+            return httpx.Response(404, json={"code": "order_not_found", "detail": "订单不存在，或你无权取消。"})
+        if public_id in self.payment_unresolved:
+            return httpx.Response(409, json={"code": "payment_unresolved", "detail": "支付结果尚未确认，请先查询原支付结果，再关闭订单。"})
+        if order["status"] == "PAID":
+            self.refunds.append(public_id)
+        elif order["status"] not in ("PENDING_PAYMENT", "CANCELED"):
+            return httpx.Response(409, json={"code": "order_not_cancelable", "detail": "这张订单当前不能取消。"})
+        order["status"] = "CANCELED"  # 已经取消的再取消一次：原样返回，不重复退款
+        return httpx.Response(200, json=order)
+
+    def cancels(self):
+        """收到的取消请求。"""
+        return [r for r in self.requests if r.method == "POST"]
 
     def _order_page(self, user, page):
         orders = self.orders.get(user["id"], [])

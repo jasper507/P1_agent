@@ -9,3 +9,6 @@ __pycache__/
 
 # 向量模型的下载缓存
 .cache/
+
+# 等用户确认时 LangGraph 存的断点（SQLite）
+.data/

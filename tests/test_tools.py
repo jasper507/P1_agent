@@ -24,7 +24,12 @@ def run(fake_django, name, raw_args):
 
 
 def test_schemas_do_not_expose_identity():
-    for name, expected in [("list_my_orders", ["status"]), ("get_order_detail", ["order_id"]), ("search_policy", ["query"])]:
+    for name, expected in [
+        ("list_my_orders", ["status"]),
+        ("get_order_detail", ["order_id"]),
+        ("search_policy", ["query"]),
+        ("cancel_order", ["order_id"]),
+    ]:
         params = TOOLS[name].schema()["function"]["parameters"]
         assert list(params["properties"]) == expected
         assert params["additionalProperties"] is False
@@ -96,3 +101,10 @@ def test_rejects_unknown_status(fake_django):
 def test_rejects_broken_json(fake_django):
     content, ok = run(fake_django, "list_my_orders", '{"status": ')
     assert ok is False and content.startswith("参数错误")
+
+
+def test_cancel_order_never_runs_directly(fake_django):
+    # 取消要先经过用户确认。万一哪段代码绕过确认直接执行它，这里也只会报错
+    content, ok = run(fake_django, "cancel_order", f'{{"order_id": "{uuid_for(101)}"}}')
+    assert ok is False and content == "错误：cancel_order 要等用户确认，不能直接执行"
+    assert fake_django.cancels() == []

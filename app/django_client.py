@@ -1,10 +1,14 @@
 from functools import lru_cache
 from http.cookiejar import CookieJar, DefaultCookiePolicy
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import httpx2 as httpx
 
 from app.config import get_settings
+
+if TYPE_CHECKING:
+    from app.auth import CsrfTokens
 
 
 class DjangoError(Exception):
@@ -25,8 +29,26 @@ class DjangoUnavailable(DjangoError):
     message = "电商服务暂时不可用"
 
 
+class DjangoRefused(DjangoError):
+    """商城按业务规则拒绝了这次操作（HTTP 409），比如订单已经发货。message 用商城自己的说明。"""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class DjangoCsrfFailed(DjangoError):
+    message = "页面校验没有通过，请刷新页面后再试"
+
+
+class DjangoOutcomeUnknown(DjangoError):
+    # 请求已经发出去了，但没等到回复：商城可能已经取消了，也可能没有
+    message = "商城没有及时回复，不确定取消有没有成功。请过一会儿查一下订单状态，再决定要不要重新取消"
+
+
 class DjangoClient:
-    """以「当前用户」的身份调用电商后端的只读接口。
+    """以「当前用户」的身份调用电商后端。除了取消订单，都是只读接口。
 
     每个方法都要传 session_id：用户是谁由 Django 根据这个 cookie 判断，
     agent 自己不保存、也不猜任何用户身份。
@@ -46,6 +68,26 @@ class DjangoClient:
         # public_id 的类型是 UUID，不是 str：拼进 URL 的东西必须先验证过
         return await self._get(f"/api/orders/{public_id}/", session_id)
 
+    async def cancel_order(self, session_id: str, csrf: "CsrfTokens", public_id: UUID) -> dict:
+        """取消订单，agent 唯一的写操作，只在用户点了确认以后调用。
+
+        写操作要过商城的 CSRF 检查：浏览器带来的 csrftoken cookie 和 X-CSRFToken 头原样转过去，由商城比对。
+        能不能取消也由商城按订单状态判断。已经取消的再取消一次，商城返回 200 和原订单，不会重复退款。
+        """
+        headers = {"Cookie": f"sessionid={session_id}; csrftoken={csrf.cookie}", "X-CSRFToken": csrf.header}
+        try:
+            r = await self._http.post(f"/api/orders/{public_id}/cancel/", headers=headers)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:  # 没连上，请求肯定没到商城
+            raise DjangoUnavailable() from e
+        except httpx.HTTPError as e:  # 发出去了但没等到回复
+            raise DjangoOutcomeUnknown() from e
+        if r.status_code == 409:
+            body = self._json(r)
+            raise DjangoRefused(body.get("code", ""), body.get("detail") or "这张订单当前不能取消")
+        if r.status_code == 403 and "CSRF" in str(self._json(r).get("detail", "")):
+            raise DjangoCsrfFailed()
+        return self._parse(r)
+
     async def aclose(self) -> None:
         await self._http.aclose()
 
@@ -54,6 +96,10 @@ class DjangoClient:
             r = await self._http.get(path, params=params, headers={"Cookie": f"sessionid={session_id}"})
         except httpx.HTTPError as e:  # 连不上、超时
             raise DjangoUnavailable() from e
+        return self._parse(r)
+
+    @staticmethod
+    def _parse(r: httpx.Response) -> dict:
         # 这几个接口都是 IsAuthenticated + SessionAuthentication：没登录时 Django 回的是 403 而不是 401
         if r.status_code in (401, 403):
             raise DjangoUnauthorized()
@@ -65,6 +111,15 @@ class DjangoClient:
             return r.json()
         except ValueError as e:  # 比如 nginx 返回了一个 HTML 错误页
             raise DjangoUnavailable() from e
+
+    @staticmethod
+    def _json(r: httpx.Response) -> dict:
+        """错误响应的 JSON 体，比如 {"code": ..., "detail": ...}；不是 JSON 就当空的。"""
+        try:
+            body = r.json()
+        except ValueError:
+            return {}
+        return body if isinstance(body, dict) else {}
 
 
 def make_django_client(base_url: str, timeout: float, transport: httpx.AsyncBaseTransport | None = None) -> DjangoClient:

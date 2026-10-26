@@ -99,3 +99,15 @@ docker compose -p p1-agent down
 ```powershell
 .venv\Scripts\python -m evals.eval_retrieval
 ```
+
+## 第 5 步：取消订单（要用户确认）
+
+用户说「帮我把那张没付款的订单取消了」，agent 不会马上取消：它先查订单，返回一张确认卡片（`pending_action`），用户点了「确认取消」才去商城取消。agent 的循环从这一步起用 LangGraph 写成一张图，停下来等确认时的状态存在 `.data\checkpoints.sqlite`，服务重启了也接得上。
+
+试一下：按第 3 步启动 Redis、电商项目和 agent，先在电商网站上下一单但不付款。然后在 http://127.0.0.1:8000/docs 里：
+
+1. 调 `POST /api/chat`：`{"message": "帮我把那张没付款的订单取消了"}`。回复里的 `pending_action` 就是确认卡片，记下 `conversation_id` 和 `pending_action.action_id`
+2. 在浏览器开发者工具里找到 `127.0.0.1` 下名为 `csrftoken` 的 cookie，复制它的值。没有的话，先打开一次 http://127.0.0.1:8080/api/auth/csrf/
+3. 调 `POST /api/chat/confirm`：请求头 `X-CSRFToken` 填刚才复制的值，请求体填 `{"conversation_id": "...", "action_id": "...", "decision": "confirm"}`；`decision` 填 `reject` 就是不取消
+
+可能的错误：卡片没处理完就发新消息，返回 409；操作编号对不上或已经处理过，返回 404；缺 `X-CSRFToken`，返回 403。每次取消在服务的输出里各有一行 `cancel_proposed` 和 `cancel_decided` 的审计日志。

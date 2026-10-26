@@ -61,7 +61,16 @@ class ConversationStore:
 
     async def save_round(self, conversation_id: UUID, user_id: int, history: list[Round], new_round: Round) -> None:
         """一轮完整跑完才调用。只留最近 max_rounds 轮，整轮丢，并重新开始计算过期时间。"""
-        rounds = (history + [new_round])[-self._max_rounds:]
+        await self._write(conversation_id, user_id, (history + [new_round])[-self._max_rounds:])
+
+    async def touch(self, conversation_id: UUID, user_id: int, history: list[Round]) -> None:
+        """这一轮停下来等用户确认：历史不变，但重新开始计时，也记下对话属于谁。
+
+        第一轮就停下来的对话，Redis 里还没有它，也要靠这一步才存在，用户点确认时才认得出是谁的对话。
+        """
+        await self._write(conversation_id, user_id, history)
+
+    async def _write(self, conversation_id: UUID, user_id: int, rounds: list[Round]) -> None:
         value = json.dumps({"user_id": user_id, "rounds": rounds}, ensure_ascii=False)
         await self._call(self._redis.set(self._key(conversation_id), value, ex=self._ttl))
 
