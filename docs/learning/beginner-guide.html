@@ -127,7 +127,7 @@ ol.explain li::marker { color: var(--accent); font-family: var(--font-mono); fon
 <div class="wrap">
 
 <header>
-  <div class="eyebrow">P1_AGENT · 第 0–5、7 步</div>
+  <div class="eyebrow">P1_AGENT · 第 0–5、7 步 + MCP</div>
   <h1>P1 客服 Agent 学习手册</h1>
   <p class="lede">这份手册只回答三个问题：这个项目到底解决什么问题；每一步为什么要做、和上一步比变了什么；代码一行一行在干什么。读完你应该能用自己的话把整个项目讲一遍。</p>
 </header>
@@ -159,7 +159,8 @@ ol.explain li::marker { color: var(--accent); font-family: var(--font-mono); fon
     <a href="#s4"><span class="n">4</span><span class="t">按售后政策回答（RAG）<small>堵「瞎编政策」这个洞，并用评测数字证明效果。</small></span></a>
     <a href="#s5"><span class="n">5</span><span class="t">取消订单要先确认<small>堵「乱动订单」这个洞：模型只提议，用户点了才执行。</small></span></a>
     <a href="#s7"><span class="n">7</span><span class="t">端到端评测：让真模型考一遍<small>26 段对话、真模型，用数字证明守得住；还找出并修好了一个提示注入问题。</small></span></a>
-    <a href="#next"><span class="n">→</span><span class="t">接下来：模拟面试、简历描述<small>第 6 步跳过了，MCP 只讲概念。</small></span></a>
+    <a href="#mcp"><span class="n">MCP</span><span class="t">MCP 服务：让别的 AI 应用也能用这些工具<small>Claude Code 里直接问「我有哪些订单」；只读，取消订单不对外。</small></span></a>
+    <a href="#next"><span class="n">→</span><span class="t">接下来：模拟面试、简历描述<small>第 6 步的演示模式和 Docker 跳过了。</small></span></a>
   </nav>
 </section>
 
@@ -759,6 +760,157 @@ problems = check_turn(turn, r.status_code, body, cancels=cancels, unconfirmed=un
   <div class="say"><b>面试这么说：</b>离线测试用假模型，只能证明代码对。所以我写了 26 段固定的对话，覆盖查订单、查政策、取消订单和提示注入，用真 DeepSeek 走真接口跑，每一轮用规则自动判：调了哪些工具、弹没弹确认卡片、商城收到几个取消请求、回复里该有和不该有的词。另外两条底线每一轮都查：没点确认就取消、泄露别人的订单。第一次跑就发现一个问题：用户冒充「系统消息」说订单已取消，模型会照着说。订单没动，因为取消必须用户点按钮，但这句话是假的。我在系统提示里加了一条规则，改前改后各跑 5 遍，这句假话从 5 次降到 0 次；再全套跑 3 遍是 75/78，底线一直是 0，没把别的题改坏。每轮平均 1.9 秒，78 段对话花了约 3 美分，因为系统提示和工具说明命中缓存，输入有 84% 按缓存价算。没用 LLM-as-judge，因为这些题用规则就能判，模型打分本身也要先验证。</div>
 </section>
 
+<section class="step" id="mcp">
+  <div class="eyebrow">第 6 步里的 MCP · 补做了</div>
+  <h2>MCP 服务：让别的 AI 应用也能用这些工具</h2>
+  <p><b>业务场景：</b>前面的工具（查订单、查订单详情、查售后政策）只有我们自己的 agent 能用。可现在很多人日常用的是 Claude、Cursor 这类 AI 应用。想让用户在这些应用里直接问「我有哪些订单」，以前就得给每个应用单独写一遍对接代码。MCP 就是为这个而生的一套统一接法：我们按协议写一个 MCP 服务，这些应用都能直接接上。</p>
+  <p>下面是在你电脑上的 Claude Code 里真实跑出来的（订单号省略了）：</p>
+  <div class="chat">
+    <div class="msg u">我现在有哪些订单</div>
+    <div class="msg tool">Claude Code → 调用 p1-shop 的 list_my_orders()</div>
+    <div class="msg tool">p1-shop → 拿你的 sessionid 问商城 → [{"status":"CANCELED","total":"89.00","items":["联调测试耳机 x1"]}]</div>
+    <div class="msg a">你目前只有 1 笔订单：联调测试耳机 x1，¥89.00，状态已取消，下单时间 2026-10-27 01:02。</div>
+  </div>
+  <p>如果在 Claude 里说「帮我取消这张订单」，它手里根本没有取消工具，只能请你到客服页面上操作。这是故意的，下面会讲为什么。</p>
+  <div class="ba">
+    <div class="before"><h4>没有 MCP 时</h4><ul><li>工具写在 agent 的进程里，只有我们自己的 agent 能调</li><li>想让 Claude、Cursor 也能查订单，要按每个应用的格式各写一套对接代码</li><li>每多写一套，就多一个地方可能把权限校验漏掉</li></ul></div>
+    <div class="after"><h4>加了 MCP 服务</h4><ul><li>一个 MCP 服务（<code>app/mcp_server.py</code>），所有支持 MCP 的应用都能接</li><li>工具不重写：和 agent 调的是同一个 <code>execute_tool</code>，参数白名单、订单归属由商城判断，一条不少</li><li>只放三个只读工具，取消订单不对外</li><li>售后政策原文做成「资源」，应用可以直接读整份文档</li></ul></div>
+  </div>
+  <div class="analogy"><b>类比：</b>MCP 像 Type-C 接口。以前每个手机一种充电口，每种充电器都要配一套线（每个 AI 应用一套对接代码）。现在大家都用 Type-C：充电器（我们的工具）做成 Type-C 口，任何 Type-C 手机（Claude、Cursor……）插上就能用。Function Calling 和 MCP 管的是两件事：Function Calling 是模型说「我要用这个工具、参数是这些」；MCP 是工具怎么插到应用上。一个管「说」，一个管「接」。</div>
+
+  <h3>谁在调谁</h3>
+  <p>MCP 服务不是一个一直开着的网站。Claude Code 要用它的时候，自己把它当成一个小程序启动起来，两边通过这个程序的<b>标准输入输出</b>（stdio）互相发 JSON 消息。所以它只在你自己的电脑上跑，也只代表你一个人。</p>
+  <div class="plot">
+    <svg viewBox="0 0 640 250" role="img" aria-label="Claude Code 等 MCP 客户端通过 stdio 调用 p1-shop MCP 服务，MCP 服务和我们自己的 agent 都调用同一个 execute_tool，再由它带着用户的 sessionid 去问商城">
+      <defs>
+        <marker id="arr6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/>
+        </marker>
+      </defs>
+      <g style="fill:var(--paper);stroke:var(--line);stroke-width:1.5">
+        <rect x="10" y="20" width="170" height="56" rx="8"/>
+        <rect x="460" y="20" width="170" height="56" rx="8"/>
+      </g>
+      <rect x="10" y="108" width="170" height="56" rx="8" style="fill:var(--amber-soft);stroke:var(--amber);stroke-width:1.5"/>
+      <rect x="235" y="108" width="170" height="56" rx="8" style="fill:var(--accent-soft);stroke:var(--accent);stroke-width:2"/>
+      <rect x="460" y="108" width="170" height="56" rx="8" style="fill:var(--paper);stroke:var(--fg);stroke-width:1.5"/>
+      <rect x="235" y="20" width="170" height="56" rx="8" style="fill:var(--paper);stroke:var(--line);stroke-width:1.5"/>
+      <g text-anchor="middle">
+        <text x="95" y="43">Claude Code / Cursor</text><text x="95" y="62" class="muted">MCP 客户端</text>
+        <text x="95" y="131" style="fill:var(--amber);font-weight:700">p1-shop MCP 服务</text><text x="95" y="150" style="fill:var(--amber)">只读的 3 个工具</text>
+        <text x="320" y="43">我们的客服网页</text><text x="320" y="62" class="muted">/api/chat（第 1–5 步）</text>
+        <text x="320" y="131" style="fill:var(--accent);font-weight:700">execute_tool</text><text x="320" y="150" style="fill:var(--accent)">同一份工具代码</text>
+        <text x="545" y="43">浏览器里的 sessionid</text><text x="545" y="62" class="muted">你自己复制的</text>
+        <text x="545" y="131">商城 Django</text><text x="545" y="150" class="muted">判断订单是不是你的</text>
+      </g>
+      <g style="stroke:var(--muted);stroke-width:1.5">
+        <line x1="95" y1="76" x2="95" y2="106" marker-end="url(#arr6)"/>
+        <line x1="180" y1="136" x2="233" y2="136" marker-end="url(#arr6)"/>
+        <line x1="320" y1="76" x2="320" y2="106" marker-end="url(#arr6)"/>
+        <line x1="405" y1="136" x2="458" y2="136" marker-end="url(#arr6)"/>
+        <polyline points="545,76 545,92 130,92 130,106" style="fill:none" marker-end="url(#arr6)"/>
+      </g>
+      <text x="103" y="98" class="muted" style="font-size:11px">stdio</text>
+      <text x="340" y="88" class="muted" style="font-size:11px">环境变量 P1_SHOP_SESSIONID</text>
+      <rect x="10" y="196" width="620" height="44" rx="8" style="fill:var(--paper);stroke:var(--line);stroke-width:1.5"/>
+      <text x="320" y="223" text-anchor="middle">两个入口，一套工具：改工具只改一处，权限规则不会出现两份</text>
+    </svg>
+  </div>
+
+  <div class="file">app/mcp_server.py：工具不重写，套一层就对外</div>
+<pre><code class="language-python">READ_ONLY = ToolAnnotations(read_only_hint=True, destructive_hint=False, ...)   # ①
+
+async def run(name: str, args: dict) -&gt; str:
+    try:
+        shop = await get_shop()                                                  # ②
+    except LoginFailed as e:
+        return f"未登录：{e}"
+    content, _ok = await execute_tool(name, json.dumps(args), shop.context())   # ③
+    return content
+
+@server.tool(description="查询当前登录用户最近的订单……", annotations=READ_ONLY)
+async def list_my_orders(status: OrderStatus | None = None) -&gt; str:            # ④
+    return await run("list_my_orders", {} if status is None else {"status": status})</code></pre>
+  <ol class="explain">
+    <li>给工具贴标签：只读、不会删东西、调几次结果都一样。客户端可以据此决定要不要每次都问用户「允许调用吗」。三个工具都贴了这个标签。</li>
+    <li>先确认「你是谁」。没登录就返回一句「未登录：……」交给客户端的模型，让它如实告诉用户，不去猜身份。</li>
+    <li>真正干活的是 <code>app/tools.py</code> 里的 <code>execute_tool</code>，和网页上的 agent 调的是<b>同一个函数</b>。参数先过 Pydantic 白名单（<code>extra="forbid"</code>），订单归属由商城判断，出错写成一句中文。MCP 这层只是换了个入口。</li>
+    <li>函数的参数和类型注解，SDK 会自动转成工具说明（JSON Schema）发给客户端。<code>OrderStatus</code> 是几个固定的状态值，模型只能从里面选。参数里<b>没有 user_id</b>，和第 0 步的设计一样，模型想查别人也传不进来。</li>
+  </ol>
+
+  <div class="file">app/mcp_server.py：身份从环境变量来，第一次用到才登录</div>
+<pre><code class="language-python">session_id = os.environ.get("P1_SHOP_SESSIONID", "").strip()              # ①
+
+async def get_shop() -&gt; Shop:
+    nonlocal shop
+    if shop is None:
+        shop = Shop(await login(django, session_id), django, get_policy_index)   # ②
+    return shop
+
+async def login(django, session_id):
+    if not SESSION_ID_RE.fullmatch(session_id):                            # ③
+        raise LoginFailed("P1_SHOP_SESSIONID 没设置或格式不对……")
+    me = await django.me(session_id)
+    return CurrentUser(id=me["id"], username=me["username"], session_id=session_id)</code></pre>
+  <ol class="explain">
+    <li>网页版 agent 从浏览器 cookie 里拿 sessionid；MCP 服务没有浏览器，所以由用户自己从浏览器复制一份，配置成环境变量。一个进程只代表一个人。</li>
+    <li>第一次调工具时才去问商城「这是谁」，之后复用。政策索引要加载向量模型（一两秒），也是第一次查政策才建，只查订单的话不用等。</li>
+    <li>和第 2 步的 <code>get_current_user</code> 是同一套检查：格式不对直接拒绝，格式对了也要商城认才算登录。</li>
+  </ol>
+
+  <div class="file">app/mcp_server.py：售后政策原文做成「资源」</div>
+<pre><code class="language-python">docs = {p.stem: p for p in sorted(policy_dir.glob("*.md"))}               # ①
+
+@server.resource("policy://{doc_id}", name="售后政策原文", mime_type="text/markdown")
+def policy_doc(doc_id: str) -&gt; str:
+    if doc_id not in docs:                                                   # ②
+        raise ValueError(f"没有这份政策：{doc_id}")
+    return docs[doc_id].read_text(encoding="utf-8")</code></pre>
+  <ol class="explain">
+    <li>启动时把 <code>policies/</code> 里有哪几份政策列出来：returns、refunds、shipping、invoices、warranty。地址写成 <code>policy://returns</code> 这样。</li>
+    <li>只认列表里有的名字，<b>不拿传进来的名字去拼文件路径</b>。不然有人传 <code>../.env</code> 就能读到密钥（路径穿越）。测试里专门试了这一条。</li>
+  </ol>
+  <p><b>工具和资源有什么区别？</b>工具是「让模型去做一件事」，由模型决定什么时候调，比如按问题搜出最相关的 4 条。资源是「一份可以直接读的文档」，由用户或客户端决定要不要放进上下文，比如把整份退换货政策贴给模型。</p>
+
+  <h3>为什么不提供取消订单</h3>
+  <p>第 5 步的取消，安全全靠那一套确认：卡片内容来自商城、只能用一次的操作编号、用户在我们的页面上点按钮、执行前复查。到了 MCP 客户端那边，界面是别人的：怎么确认、会不会让模型自己点「同意」、有的客户端还能设成全部自动允许，我们都管不了。所以写操作干脆不对外。MCP 其实有让服务端向用户发起确认的机制（elicitation），但支不支持、怎么展示取决于客户端，取消订单不能指望别人的界面。这个决定写在 ADR 0020 里。</p>
+
+  <div class="file">tests/test_mcp_server.py：用官方客户端在进程里连上，走真协议</div>
+<pre><code class="language-python">async with Client(make_server(FakeDjango())) as client:                   # ①
+    tools = (await client.list_tools()).tools
+assert set(tools) == {"list_my_orders", "get_order_detail", "search_policy"}
+assert "cancel_order" not in tools                                         # ②
+assert "user_id" not in json.dumps([t.input_schema for t in tools])        # ③</code></pre>
+  <ol class="explain">
+    <li>MCP 官方 SDK 的 <code>Client</code> 可以直接连一个服务对象，不用真的起进程，测试几毫秒就跑完。商城还是第 2 步那个假商城。</li>
+    <li>写操作不对外，用测试钉死：以后谁加了取消工具，这条测试就会变红。</li>
+    <li>任何工具的参数里都不能出现 <code>user_id</code>。一共 11 个测试，还测了只看得到自己的订单、别人的订单查不到、没登录不去问商城、路径穿越被拒。</li>
+  </ol>
+
+  <h3>怎么接到 Claude Code（你已经接好了）</h3>
+  <ol>
+    <li>在商城 http://127.0.0.1:8080 登录，在浏览器开发者工具里找到 <code>127.0.0.1</code> 下名为 <code>sessionid</code> 的 cookie，复制它的值。</li>
+    <li>在 <code>C:\P1_agent</code> 里执行一次 <code>claude mcp add</code>（完整命令在 README 的 MCP 一节），把 sessionid 填进 <code>P1_SHOP_SESSIONID</code>。</li>
+    <li><code>claude mcp list</code> 看到 <code>p1-shop … ✓ Connected</code> 就是接好了。</li>
+    <li>在 <code>C:\P1_agent</code> 里运行 <code>claude</code>，直接问「我有哪些订单」。</li>
+  </ol>
+  <p>接的时候踩过的三个坑：</p>
+  <div class="techs">
+    <div class="tech"><b>不要用 project 范围</b><span><code>--scope project</code> 会把配置写进项目里的 <code>.mcp.json</code>，sessionid 就跟着代码提交出去了，等于把登录状态公开。默认的 local 范围只存在你本机的用户配置里。</span></div>
+    <div class="tech"><b>PowerShell 吞掉 --</b><span>Windows PowerShell 5.1 调外部命令时会把单独的 <code>--</code> 去掉，后面的 <code>-m</code> 就被当成 claude 自己的参数，报 <code>unknown option '-m'</code>。在 <code>claude</code> 后面加 <code>--%</code>（让 PowerShell 别解析后面的内容），或者换到 cmd 里执行。</span></div>
+    <div class="tech"><b>用虚拟环境的 python</b><span>直接写 <code>python</code> 会用到别的 Python，装的包不对。写全路径 <code>C:\P1_agent\.venv\Scripts\python.exe</code>，再设 <code>PYTHONPATH=C:\P1_agent</code>，从哪个目录启动都找得到代码。</span></div>
+  </div>
+
+  <h3>还没做的（面试被问到要能说）</h3>
+  <ul>
+    <li><b>sessionid 会过期：</b>过期或者在商城退出登录后，工具会返回「未登录」，要重新复制一份填进去。这种做法只适合本机自己用。</li>
+    <li><b>多人共用要换方式：</b>stdio 只能本机用。要做成大家都能连的服务，得换成 HTTP 方式（streamable-http），并给每个请求做认证（比如 OAuth），不能再靠一个环境变量。</li>
+    <li><b>回答质量没有评测：</b>客户端那边的模型和提示词我们管不了。我们能保证的是：通过 MCP 拿不到别人的订单，也动不了任何订单。</li>
+  </ul>
+  <div class="skills"><span>MCP 协议</span><span>stdio</span><span>工具 / 资源</span><span>只读标注</span><span>复用工具层</span><span>路径穿越防护</span><span>密钥不进仓库</span><span>协议级测试</span></div>
+  <div class="say"><b>面试这么说：</b>我把客服的三个只读工具做成了一个 MCP 服务，用官方 Python SDK、stdio 方式，Claude Code 这类客户端可以直接接。工具没有重写，MCP 层只是换了一个入口，调的还是 agent 用的同一个 execute_tool，所以参数白名单、订单归属由商城判断这些规则只有一份。身份是用户自己配置的 sessionid，第一次调工具时去商城校验。取消订单没有对外，因为它的安全依赖我们页面上的确认流程，换到别人的客户端里保证不了；售后政策原文做成了资源，只认已有的文件名，防路径穿越。测试用 SDK 的客户端在进程内走真协议，钉死了「没有写工具、参数里没有 user_id」。Function Calling 解决模型怎么提出调用，MCP 解决工具怎么接进不同的应用，两者是配合关系。</div>
+</section>
+
 <section class="step" id="tech">
   <div class="eyebrow">回头看</div>
   <h2>每个技术解决什么问题</h2>
@@ -779,6 +931,7 @@ problems = check_turn(turn, r.status_code, body, cancels=cancels, unconfirmed=un
     <div class="tech"><b>转发 CSRF</b><span>写操作要防跨站伪造请求，校验交给商城。<small>没有它：别的网站可以借用你的登录状态发取消请求。</small></span></div>
     <div class="tech"><b>审计日志</b><span>谁、什么时候、要取消哪张、点了什么、结果如何。<small>没有它：出了纠纷，说不清是用户点的还是模型自己做的。</small></span></div>
     <div class="tech"><b>端到端评测</b><span>真模型跑固定的对话，每一轮用规则判对错，两条底线每一轮都查。<small>没有它：只知道代码对，不知道模型会被一句冒充的「系统消息」骗得说假话。</small></span></div>
+    <div class="tech"><b>MCP</b><span>把工具按统一协议对外，Claude、Cursor 这类应用都能直接接。<small>没有它：每接一个 AI 应用就要写一套对接代码，每一套都可能漏掉权限校验。</small></span></div>
   </div>
   <h3>工程能力体现在哪</h3>
   <ul>
@@ -788,7 +941,7 @@ problems = check_turn(turn, r.status_code, body, cancels=cancels, unconfirmed=un
     <li><b>并发和一致性：</b>对话锁、锁比超时长、整轮保存，这些和你项目一里的库存锁是同一类问题。</li>
     <li><b>用数据做决定：</b>混合检索做了，但评测说不该默认用，就关掉，并写成设计决策记录（ADR 0013）。</li>
     <li><b>用评测找问题、验证修复：</b>端到端评测第一次跑就发现模型会被冒充的「系统消息」骗；改了一条提示词，改前改后各跑 5 遍对比，再全套跑 3 遍，确认没把别的题改坏。</li>
-    <li><b>可测试：</b>113 个离线测试；第 5 步还在真商城、真 Redis、真 DeepSeek 上完整走了一遍。第 5 步还做了变异测试：故意把代码改坏 15 处（比如跳过确认直接取消），15 处都让测试变红了。</li>
+    <li><b>可测试：</b>124 个离线测试（含 MCP 服务的 11 个）；第 5 步还在真商城、真 Redis、真 DeepSeek 上完整走了一遍。第 5 步还做了变异测试：故意把代码改坏 15 处（比如跳过确认直接取消），15 处都让测试变红了。</li>
   </ul>
 </section>
 
@@ -796,8 +949,8 @@ problems = check_turn(turn, r.status_code, body, cancels=cancels, unconfirmed=un
   <div class="eyebrow">接下来</div>
   <h2>下一步安排</h2>
   <div class="road">
-    <div><b>第 6 步：演示模式 + Docker + MCP（跳过）</b><br>
-      原计划是让没有你商城的人也能跑起来。这个项目是准备面试用的，不需要别人部署，所以跳过。MCP 只讲概念：它是 AI 应用接工具的一套统一协议，工具方按协议写一个 MCP 服务，Claude、Cursor 这类客户端都能直接接上。Function Calling 说的是模型怎么提出「我要调哪个工具」，MCP 说的是工具怎么接进来。要接的话，把查订单、查政策包成一个 MCP 服务，登录还是转发 sessionid；取消订单那一步的确认不能交给 MCP 客户端，仍然要用户点按钮。</div>
+    <div><b>第 6 步：演示模式 + Docker（跳过），MCP（补做了，见<a href="#mcp">上面</a>）</b><br>
+      演示模式和 Docker 原计划是让没有你商城的人也能跑起来。这个项目是准备面试用的，不需要别人部署，所以跳过。MCP 后来补做了：三个只读工具和售后政策原文，已经接进你电脑上的 Claude Code。</div>
     <div><b>第 7 步：端到端评测（做了精简版，见<a href="#s7">上面</a>）</b><br>
       做了：26 段对话、真模型、规则判分、两条底线、耗时和花费。没做：让另一个模型打分（LLM-as-judge）、接调用链追踪平台，原因写在第 7 步最后。</div>
     <div class="now"><b>接下来：模拟面试 + 简历描述</b><br>
