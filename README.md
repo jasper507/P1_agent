@@ -121,3 +121,31 @@ docker compose -p p1-agent down
 ```
 
 最近一次 26 道各跑 3 遍，75/78 通过，没点确认就取消、泄露别人订单都是 0 次。评测还找出一个问题：用户冒充「系统消息」说订单已取消，模型会照着说。系统提示加了一条规则后，又跑的 8 遍里没再出现。说明和完整结果见 `evals\README.md`。
+
+## MCP 服务：让别的 AI 应用也能用这些工具
+
+把查订单、查订单详情、查售后政策三个工具做成 MCP 服务，售后政策原文做成资源（`policy://returns` 这样的地址）。工具实现和 agent 共用 `app/tools.py`，所以通过 MCP 也只能查到自己的订单。取消订单不对外，因为它必须在 agent 的页面上点确认，见 ADR 0020。
+
+服务由 MCP 客户端拉起（stdio）。需要两个环境变量：`P1_SHOP_SESSIONID` 填浏览器里商城 `127.0.0.1` 下名为 `sessionid` 的 cookie 值（先在商城登录）；`PYTHONPATH` 填 `C:\P1_agent`，这样从哪个目录拉起都找得到 `app`。商城不在 8080 的话再加 `DJANGO_BASE_URL`。
+
+接到 Claude Code（在 `C:\P1_agent` 里执行一次，`<sessionid>` 换成真的值）：
+
+```powershell
+claude mcp add p1-shop --env P1_SHOP_SESSIONID=<sessionid> --env PYTHONPATH=C:\P1_agent -- C:\P1_agent\.venv\Scripts\python.exe -m app.mcp_server
+```
+
+接到 Claude Desktop：在它的配置文件 `claude_desktop_config.json` 里加上（JSON 里的反斜杠要写两个）：
+
+```json
+{
+  "mcpServers": {
+    "p1-shop": {
+      "command": "C:\\P1_agent\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "app.mcp_server"],
+      "env": {"P1_SHOP_SESSIONID": "<sessionid>", "PYTHONPATH": "C:\\P1_agent"}
+    }
+  }
+}
+```
+
+离线测试 `tests\test_mcp_server.py` 用 MCP 官方客户端在进程内连上服务，走一遍列工具、调工具、读资源。
